@@ -42,7 +42,16 @@ NSString *GHLKSLogTail(long maxBytes);
 // 清空日志。
 void GHLKSClearLog(void);
 
-// 哆啦A梦图路径：优先 /var/jb/...（rootless），再试 /Library/...；找不到返回 nil。
+// 自选头像：存在 Documents/GuHaiLongKuaishou/custom-avatar.jpg；
+// 有它时三处（悬浮钮、卡片头、关于页）都显示它，没有时回默认哆啦A梦图。
+// 存图时居中裁成正方形、长边缩到 256 再写 JPEG（照抖音自选龙头的做法）。
+NSString *GHLKSCustomAvatarPath(void);
+BOOL GHLKSHasCustomAvatar(void);
+BOOL GHLSaveCustomAvatarImage(UIImage *image);
+void GHLClearCustomAvatar(void);
+
+// 头像图路径：先试自选头像，再试哆啦A梦图（/var/jb/... 优先，
+// 再试 /Library/...）；都找不到返回 nil。
 NSString *GHLKSLogoImagePath(void);
 
 // 快手自身版本字串，如 14.10.10 (10089)；读不到时返回目标版本。

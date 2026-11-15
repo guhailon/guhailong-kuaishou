@@ -20,6 +20,9 @@ static UIColor *GHLKSRedColor(void) {
     return [UIColor colorWithRed:1.0 green:0.38 blue:0.32 alpha:1.0];
 }
 
+// 深色按钮（诊断页一节定义，通用设置页先用，先声明）。
+static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action);
+
 static UILabel *GHLKSMakeLabel(const char *text, CGFloat size, BOOL bold, UIColor *color) {
     UILabel *label = [[UILabel alloc] init];
     label.text = GHLKSStr(text);
@@ -193,6 +196,33 @@ void GHLKSInstallFloatingButton(void) {
     GHLKSLog("v1.0.1 float button installed at %.0f,%.0f image=%s", cx, cy, imagePath ? "yes" : "no");
 }
 
+// 换头像 / 恢复默认后重刷悬浮钮里的图（面板关掉、悬浮钮再出现时就是新图）。
+static void GHLKSRefreshFloatingButtonImage(void) {
+    if (!GHLKSFloatWindow) return;
+    UIView *holderView = GHLKSFloatWindow.rootViewController.view;
+    if (!holderView || [[holderView subviews] count] == 0) return;
+    UIView *buttonView = [[holderView subviews] objectAtIndex:0];
+    NSString *imagePath = GHLKSLogoImagePath();
+    UIImage *image = imagePath ? [UIImage imageWithContentsOfFile:imagePath] : nil;
+    if (!image) return;
+    for (UIView *sub in [buttonView subviews]) {
+        if ([sub isKindOfClass:[UIImageView class]]) {
+            ((UIImageView *)sub).image = image;
+            return;
+        }
+    }
+    // 之前是文字兜底、没有图：把文字拿掉，补一张图上去。
+    for (UIView *sub in [[buttonView subviews] copy]) {
+        if ([sub isKindOfClass:[UILabel class]]) [sub removeFromSuperview];
+    }
+    UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(4, 4, 48, 48)];
+    iv.image = image;
+    iv.contentMode = UIViewContentModeScaleAspectFill;
+    iv.layer.cornerRadius = 24.0;
+    iv.layer.masksToBounds = YES;
+    [buttonView addSubview:iv];
+}
+
 #pragma mark - 子页基类（卡片 + 顶部返回行 + 底部完成钮）
 
 @interface GHLKSPageViewController : UIViewController
@@ -276,6 +306,8 @@ void GHLKSInstallFloatingButton(void) {
 // 子页类声明（定义在文件后面，菜单页先引用）。
 @interface GHLKSPlanningViewController : GHLKSPageViewController
 @end
+@interface GHLKSGeneralSettingsViewController : GHLKSPageViewController <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
+@end
 @interface GHLKSDiagnosticsViewController : GHLKSPageViewController
 @end
 @interface GHLKSLogViewerViewController : GHLKSPageViewController
@@ -358,6 +390,16 @@ void GHLKSInstallFloatingButton(void) {
     [_card.contentView addSubview:_doneButton];
 }
 
+// 从子页返回时重刷卡片头图（通用设置里换了头像，回来就要看到新图）。
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    UIImageView *iv = (UIImageView *)[_card.contentView viewWithTag:2001];
+    if (!iv) return;
+    NSString *imagePath = GHLKSLogoImagePath();
+    UIImage *image = imagePath ? [UIImage imageWithContentsOfFile:imagePath] : nil;
+    if (image) iv.image = image;
+}
+
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     CGRect cardFrame = GHLKSCardFrameForBounds(self.view.bounds);
@@ -394,7 +436,7 @@ void GHLKSInstallFloatingButton(void) {
     if (index < 0 || index > 9) return;
     UIViewController *vc = nil;
     switch (index) {
-        case 0: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"通用设置"]; break;
+        case 0: vc = [[GHLKSGeneralSettingsViewController alloc] initWithPageTitle:"通用设置"]; break;
         case 1: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"导航入口"]; break;
         case 2: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"首页设置"]; break;
         case 3: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"精选设置"]; break;
@@ -450,6 +492,120 @@ void GHLKSInstallFloatingButton(void) {
     self.scroll.contentSize = CGSizeMake(cw, 56 + bodySize.height + 20);
     CGRect cf = self.content.frame;
     cf.size.height = self.scroll.contentSize.height;
+    self.content.frame = cf;
+}
+
+@end
+
+#pragma mark - 通用设置页（更换头像 / 恢复默认）
+
+@implementation GHLKSGeneralSettingsViewController {
+    UIImageView *_avatarView;
+    UILabel *_statusLabel;
+}
+
+- (instancetype)init {
+    return [super initWithPageTitle:"通用设置"];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    _avatarView = [[UIImageView alloc] init];
+    _avatarView.contentMode = UIViewContentModeScaleAspectFill;
+    _avatarView.layer.cornerRadius = 12;
+    _avatarView.layer.masksToBounds = YES;
+    _avatarView.layer.borderColor = [[GHLKSGoldColor() colorWithAlphaComponent:0.8] CGColor];
+    _avatarView.layer.borderWidth = 1.5;
+    _avatarView.tag = 4601;
+    [self.content addSubview:_avatarView];
+    _statusLabel = GHLKSMakeLabel("", 14, NO, [UIColor whiteColor]);
+    _statusLabel.textAlignment = NSTextAlignmentCenter;
+    _statusLabel.tag = 4602;
+    [self.content addSubview:_statusLabel];
+    UIButton *changeButton = GHLKSMakeDarkButton("更换头像", self, @selector(changeAvatarTapped));
+    changeButton.tag = 4603;
+    [self.content addSubview:changeButton];
+    UIButton *resetButton = GHLKSMakeDarkButton("恢复默认头像", self, @selector(resetAvatarTapped));
+    resetButton.tag = 4604;
+    [self.content addSubview:resetButton];
+    UILabel *note = GHLKSMakeLabel("头像用在悬浮钮、菜单卡片头和关于页。从相册挑一张换上去，或恢复默认哆啦A梦。", 12, NO, [UIColor lightGrayColor]);
+    note.numberOfLines = 0;
+    note.tag = 4605;
+    [self.content addSubview:note];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self refreshAvatar];
+}
+
+- (void)refreshAvatar {
+    NSString *imagePath = GHLKSLogoImagePath();
+    UIImage *image = imagePath ? [UIImage imageWithContentsOfFile:imagePath] : nil;
+    if (image) _avatarView.image = image;
+    _statusLabel.text = GHLKSStr(GHLKSHasCustomAvatar() ? "已换自选图" : "默认哆啦A梦");
+}
+
+// 更换头像：相册选图（照抖音自选龙头的做法；存图是 256 像素小 JPEG，主线程直接存，不开后台队列）。
+- (void)changeAvatarTapped {
+    UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+    picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)resetAvatarTapped {
+    GHLClearCustomAvatar();
+    GHLKSRefreshFloatingButtonImage();
+    [self refreshAvatar];
+    GHLKSLog("v1.0.1 custom avatar reset to default");
+    GHLKSShowToast(GHLKSStr("已恢复默认头像"));
+}
+
+- (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary *)info {
+    UIImage *image = [info objectForKey:UIImagePickerControllerOriginalImage];
+    [picker dismissViewControllerAnimated:YES completion:nil];
+    if (!image) {
+        GHLKSShowToast(GHLKSStr("选图失败"));
+        return;
+    }
+    BOOL ok = GHLSaveCustomAvatarImage(image);
+    if (!ok) {
+        GHLKSShowToast(GHLKSStr("保存失败，换图没成功"));
+        return;
+    }
+    GHLKSRefreshFloatingButtonImage();
+    [self refreshAvatar];
+    GHLKSLog("v1.0.1 custom avatar saved");
+    GHLKSShowToast(GHLKSStr("头像已更换"));
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    [picker dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)layoutPage {
+    [super layoutPage];
+    CGFloat cw = CGRectGetWidth(self.content.bounds);
+    if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
+    CGFloat y = 8;
+    _avatarView.frame = CGRectMake((cw - 72) / 2.0, y, 72, 72);
+    y += 80;
+    _statusLabel.frame = CGRectMake(16, y, cw - 32, 22);
+    y += 30;
+    UIButton *changeButton = (UIButton *)[self.content viewWithTag:4603];
+    changeButton.frame = CGRectMake(16, y, cw - 32, 44);
+    y += 52;
+    UIButton *resetButton = (UIButton *)[self.content viewWithTag:4604];
+    resetButton.frame = CGRectMake(16, y, cw - 32, 44);
+    y += 52;
+    UILabel *note = (UILabel *)[self.content viewWithTag:4605];
+    CGSize nSize = [note sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    note.frame = CGRectMake(16, y, cw - 32, nSize.height);
+    y += nSize.height + 20;
+    self.scroll.contentSize = CGSizeMake(cw, y);
+    CGRect cf = self.content.frame;
+    cf.size.height = y;
     self.content.frame = cf;
 }
 
@@ -663,6 +819,9 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     UIButton *copyButton = GHLKSMakeDarkButton("复制日志", self, @selector(copyLogTapped));
     copyButton.tag = 4401;
     [self.content addSubview:copyButton];
+    UIButton *shareButton = GHLKSMakeDarkButton("分享日志", self, @selector(shareLogTapped));
+    shareButton.tag = 4404;
+    [self.content addSubview:shareButton];
     UIButton *clearButton = GHLKSMakeDarkButton("清空日志", self, @selector(clearLogTapped));
     clearButton.tag = 4402;
     [self.content addSubview:clearButton];
@@ -686,6 +845,22 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     GHLKSShowToast(GHLKSStr("已复制日志"));
 }
 
+// 分享日志：把日志文件整个交系统分享（存到文件、发给别人都行），照抖音导出配置的做法。
+- (void)shareLogTapped {
+    NSString *path = GHLKSLogFilePath();
+    if (!path || ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        GHLKSShowToast(GHLKSStr("暂无日志"));
+        return;
+    }
+    NSURL *url = [NSURL fileURLWithPath:path];
+    UIActivityViewController *activityVC = [[UIActivityViewController alloc] initWithActivityItems:[NSArray arrayWithObject:url] applicationActivities:nil];
+    if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+        activityVC.popoverPresentationController.sourceView = self.view;
+        activityVC.popoverPresentationController.sourceRect = self.view.bounds;
+    }
+    [self presentViewController:activityVC animated:YES completion:nil];
+}
+
 - (void)clearLogTapped {
     GHLKSClearLog();
     [self reloadLog];
@@ -702,13 +877,15 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
     CGFloat scrollH = CGRectGetHeight(self.scroll.frame);
     _textView.frame = CGRectMake(16, 8, cw - 32, scrollH - 8 - 52 - 8);
-    CGFloat bw = (cw - 32 - 16) / 3.0;
+    CGFloat bw = (cw - 32 - 24) / 4.0;
     UIButton *copyButton = (UIButton *)[self.content viewWithTag:4401];
     copyButton.frame = CGRectMake(16, scrollH - 52, bw, 44);
+    UIButton *shareButton = (UIButton *)[self.content viewWithTag:4404];
+    shareButton.frame = CGRectMake(16 + (bw + 8), scrollH - 52, bw, 44);
     UIButton *clearButton = (UIButton *)[self.content viewWithTag:4402];
-    clearButton.frame = CGRectMake(16 + bw + 8, scrollH - 52, bw, 44);
+    clearButton.frame = CGRectMake(16 + (bw + 8) * 2, scrollH - 52, bw, 44);
     UIButton *refreshButton = (UIButton *)[self.content viewWithTag:4403];
-    refreshButton.frame = CGRectMake(16 + (bw + 8) * 2, scrollH - 52, bw, 44);
+    refreshButton.frame = CGRectMake(16 + (bw + 8) * 3, scrollH - 52, bw, 44);
     self.scroll.contentSize = CGSizeMake(cw, scrollH);
     CGRect cf = self.content.frame;
     cf.size.height = scrollH;
@@ -762,7 +939,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     ver.textAlignment = NSTextAlignmentCenter;
     ver.tag = 4504;
     [self.content addSubview:ver];
-    _descLabel = GHLKSMakeLabel("顾海龙快手 1.0.1：深色毛玻璃设置卡片、悬浮入口、诊断反馈与关于页（关于页新增 QQ 群行与加入 QQ 群按钮）。精选纯净与底栏透明目前仅为探针，待快手 14.10.10 类 dump 后再接实效。免费使用，仅限学习交流。", 13, NO, [UIColor whiteColor]);
+    _descLabel = GHLKSMakeLabel("顾海龙快手 1.0.1：深色毛玻璃设置卡片、悬浮入口、诊断反馈与关于页。通用设置可换头像（默认哆啦A梦），日志页可分享日志，关于页新增 QQ 群行与加入 QQ 群按钮。精选纯净与底栏透明目前仅为探针，待快手 14.10.10 类 dump 后再接实效。免费使用，仅限学习交流。", 13, NO, [UIColor whiteColor]);
     _descLabel.numberOfLines = 0;
     _descLabel.tag = 4505;
     [self.content addSubview:_descLabel];

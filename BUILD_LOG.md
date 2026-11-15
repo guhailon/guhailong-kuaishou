@@ -158,3 +158,55 @@
 - 说明：cbed577 报告里写的 dylib 388,688 B 与本次重编的 372,160 B 对不上（包大小变化与换图完全吻合：
   99,774 − 29,706 + 44,177 ≈ 114,456），字串计数全部对得上，应为上次量法不同；旧包已被覆盖，无法复核，记一笔。
 - 诚实状态：换图只在本地冒烟验过，未真机验过——悬浮钮、卡片头、关于页三处是不是都显示哆啦A梦，要真机看。
+
+## 分享日志 + 头像任意换（v1.0.1 未推之前，Lee 2026-11-15 12:31、12:32 定）
+
+- 分享日志：日志查看页底部由 3 个按钮改成 4 个（复制日志、分享日志、清空日志、刷新），
+  点分享日志弹出系统分享（UIActivityViewController），分享日志文件
+  `Documents/GuHaiLongKuaishou.log`（走已有的 `GHLKSLogFilePath()`，文件不存在弹「暂无日志」；
+  照抖音导出配置的做法，iPad 时锚到当前 view）。
+- 头像任意换（照抖音自选龙头的做法，只学思路不抄代码）：
+  - `GHLKS.h/.m`：新增自选头像 helper——`GHLKSCustomAvatarPath()`（存
+    `Documents/GuHaiLongKuaishou/custom-avatar.jpg`）、`GHLKSHasCustomAvatar()`、
+    `GHLSaveCustomAvatarImage()`（居中裁正方形、长边缩到 256、JPEG 0.88 存）、
+    `GHLClearCustomAvatar()`；`GHLKSLogoImagePath()` 改成先试自选头像（损坏当没有），
+    再试哆啦A梦图——悬浮钮、卡片头、关于页三处共用这个 helper，换一张图三处一起变。
+  - `GHLKSPanel.m`：通用设置格子不再是规划页，改成真正的 `GHLKSGeneralSettingsViewController`
+   （头像预览 72×72 + 状态行「默认哆啦A梦」/「已换自选图」+「更换头像」+「恢复默认头像」+
+    说明小字）；「更换头像」开相册 picker（`UIImagePickerController`，本页自己当 delegate，
+    存图是 256 像素小 JPEG，主线程直接存，不开后台队列——本工程禁 `dispatch_get_global_queue`）；
+    换完 / 恢复后重刷悬浮钮图（`GHLKSRefreshFloatingButtonImage()`）和本页预览，菜单页
+    `viewWillAppear` 回来时也重刷卡片头图；关于页描述文案同步加上这两项。
+  - 菜单分发表 case 0 改走新页，其余 7 个格子仍是规划页；版本号保持 1.0.1 不动。
+- 零字面量：新代码全部字串走 C 字串 + `GHLKSStr`，源码 `@"` 仍为 0 个（全部 7 个源码文件）。
+- 构建教训（2026-11-15 12:40）：工作区直接 `make package` 在签名那步失败——
+  `ldid` 在工作区 btrfs 上报 `Operation not permitted`，/tmp（tmpfs）上能跑。
+  改在 /tmp 拷一份工程编（`cp -a` 后 `chmod -R a-s` 去 setgid，否则 dpkg-deb 嫌
+  DEBIAN 目录权限 2755），编好把 .deb 拷回 staging 的 `packages/`。以后冒烟都这么编。
+  另：这次包名是 `1.0.1-2+debug`（上次是 `-1`，theos 的 debian 修订号涨了），
+  control 里 Version 仍是 1.0.1 系，macOS 发布包才是 1.0.1。
+
+## 分享日志 + 头像任意换后重验（Linux 冒烟，/tmp/ghlks101，包验完已留 staging、/tmp 已清）
+
+- `.deb`：`packages/com.guhailong.kuaishou_1.0.1-2+debug_iphoneos-arm64.deb`，
+  **125,226 B，SHA256 `ae397055f21de71e35bd66be2c6e5373c0eb37dbb9c39c3047f4f0efea0491c5`**，
+  control：Package `com.guhailong.kuaishou`、Version `1.0.1-2+debug`、
+  Architecture `iphoneos-arm64`、Depends `firmware (>= 15.0), mobilesubstrate`。
+  旧 1.0.1 冒烟包（114,456 B，`1.0.1-1+debug`）仍在 `packages/` 里，未动；1.0.0 冒烟包也在。
+- 内容：dylib 429,616 B（比换图版的 372,160 B 大，新页 + picker + 存图 helper 在内）、
+  Filter plist 52 B（`com.jiangjia.gif`）、`doraemon.png` 44,177 B；包里没有 `dragon-head.jpg`。
+- dylib：universal arm64（cpusubtype 0，201,584 B）+ arm64e（cpusubtype 2，200,240 B）；
+  `__cfstring` **0 / 0**（python 解析 Mach-O load commands 验过）；禁 API 全 0（两片）：
+  `CFNotificationCenterAddObserver`、`LSApplicationWorkspace`、`dispatch_get_global_queue`、
+  `keyWindow`、`NSUUID`、`uuid_generate`、`uuid_unparse`。
+- 字串计数（两片一致，每片）：「1.0.1」×17（多了 2 条新日志行）、「1.0.0」×0、
+  「dragon-head」×0、「doraemon.png」×2、「1130823454」×2、「qun.qq.com」×1、
+  「加入QQ群」×1；新增：「分享日志」×2、「更换头像」×1、「恢复默认头像」×2、
+  「已换自选图」×1、「默认哆啦A梦」×3、「custom-avatar.jpg」×1、「头像已更换」×1、
+  「已恢复默认头像」×1、「暂无日志」×1、「选图失败」×1、「保存失败，换图没成功」×1、
+  「custom avatar」×2；「顾海龙快手」×3、「GUHAILONG KUAISHOU」×1、「已复制日志」×1、
+  「复制日志」×2、「清空日志」×1、「通用设置」×2、「完整日志」×2、「v1.0.1 loaded」×1、
+  「panel opened」×1、「GuHaiLongKuaishou.log」×1、「com.guhailong.kuaishou」×1、「14.10.10」×2。
+  （中文字串用字节级计数验，`strings` 默认会把 UTF-8 多字节字元切断，数出来是 0，不可信。）
+- 诚实状态：分享日志与换头像只在本地冒烟验过，未真机验过——分享面板弹不弹得出、相册选图
+  存不存得进、换完三处是不是都变新图、恢复默认回不回哆啦A梦，都要真机看。

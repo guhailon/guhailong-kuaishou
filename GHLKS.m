@@ -82,7 +82,86 @@ void GHLKSClearLog(void) {
     GHLKSLog("log cleared by user");
 }
 
+static const char *kGHLKSCustomAvatarDirName = "GuHaiLongKuaishou";
+static const char *kGHLKSCustomAvatarFileName = "custom-avatar.jpg";
+
+NSString *GHLKSCustomAvatarPath(void) {
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *docs = [paths firstObject];
+    if (!docs) return nil;
+    NSString *dir = [docs stringByAppendingPathComponent:GHLKSStr(kGHLKSCustomAvatarDirName)];
+    return [dir stringByAppendingPathComponent:GHLKSStr(kGHLKSCustomAvatarFileName)];
+}
+
+// 读一张图并校验能解码（尺寸大于 0 才算有效，否则当损坏处理）。
+static UIImage *GHLKSValidImageAtPath(NSString *path) {
+    if (!path || [path length] == 0) return nil;
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (!data || [data length] == 0) return nil;
+    UIImage *image = [UIImage imageWithData:data];
+    if (!image || image.size.width <= 0 || image.size.height <= 0) return nil;
+    return image;
+}
+
+BOOL GHLKSHasCustomAvatar(void) {
+    return GHLKSValidImageAtPath(GHLKSCustomAvatarPath()) != nil;
+}
+
+// 居中裁成正方形：短边等比铺满正方形、长边两端对称裁掉（方向自动正确，不拉伸变形）。
+static UIImage *GHLKSCenterCroppedSquare(UIImage *image) {
+    if (!image) return nil;
+    CGFloat side = MIN(image.size.width, image.size.height);
+    if (side <= 0) return nil;
+    CGFloat k = side / MIN(image.size.width, image.size.height);
+    CGSize drawSize = CGSizeMake(image.size.width * k, image.size.height * k);
+    CGRect drawRect = CGRectMake((side - drawSize.width) / 2.0, (side - drawSize.height) / 2.0, drawSize.width, drawSize.height);
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), YES, 1.0);
+    [image drawInRect:drawRect];
+    UIImage *result = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return result ? result : image;
+}
+
+// 按比例缩放（保持宽高比，不拉伸；目标是长边不超过 maxDimension）。
+static UIImage *GHLKSScaledToMaxDimension(UIImage *image, CGFloat maxDimension) {
+    if (!image || maxDimension <= 0) return image;
+    CGFloat longest = MAX(image.size.width, image.size.height);
+    if (longest <= maxDimension) return image;
+    CGFloat scale = maxDimension / longest;
+    CGSize newSize = CGSizeMake(image.size.width * scale, image.size.height * scale);
+    UIGraphicsBeginImageContextWithOptions(newSize, YES, 1.0);
+    [image drawInRect:CGRectMake(0, 0, newSize.width, newSize.height)];
+    UIImage *scaled = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return scaled ? scaled : image;
+}
+
+BOOL GHLSaveCustomAvatarImage(UIImage *image) {
+    if (!image) return NO;
+    NSString *path = GHLKSCustomAvatarPath();
+    if (!path) return NO;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [path stringByDeletingLastPathComponent];
+    if (![fm fileExistsAtPath:dir]) {
+        [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    UIImage *square = GHLKSCenterCroppedSquare(image);
+    UIImage *resized = GHLKSScaledToMaxDimension(square, 256);
+    NSData *jpeg = UIImageJPEGRepresentation(resized, 0.88);
+    if (!jpeg) return NO;
+    return [jpeg writeToFile:path atomically:YES];
+}
+
+void GHLClearCustomAvatar(void) {
+    NSString *path = GHLKSCustomAvatarPath();
+    if (!path) return;
+    [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+}
+
 NSString *GHLKSLogoImagePath(void) {
+    // 自选头像优先（文件损坏时当没有，继续试默认图）。
+    NSString *custom = GHLKSCustomAvatarPath();
+    if (custom && GHLKSValidImageAtPath(custom)) return custom;
     static const char *candidates[] = {
         "/var/jb/Library/Application Support/GuHaiLongKuaishou/doraemon.png",
         "/Library/Application Support/GuHaiLongKuaishou/doraemon.png",
