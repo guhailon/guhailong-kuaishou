@@ -9,15 +9,14 @@
 extern "C" {
 #endif
 
-static const char *kGHLKSVersion = "1.0.1";
+static const char *kGHLKSVersion = "1.0.2";
 static const char *kGHLKSTargetKuaishouVersion = "14.10.10";
 static const char *kGHLKSTargetKuaishouBuild = "10089";
 static const char *kGHLKSPrefsDomain = "com.guhailong.kuaishou";
 static const char *kGHLKSLogFileName = "GuHaiLongKuaishou.log";
 static const char *kGHLKSQQNumber = "2309103548";
 static const char *kGHLKSQQGroupNumber = "1130823454";
-// QQ 群加群邀请链接（与抖音同群 1130823454，做法与链接值照抖音的抄，只留这一份）。
-static const char *kGHLKSQQGroupJoinURL = "https://qun.qq.com/universal-share/share?ac=1&authKey=1jedvqhgrhj4mHm9Sn3c2xEkV3wYRdGeXsFSXn8hHJsRBfOUByIchAevdyEfS5zF&busi_data=eyJncm91cENvZGUiOiIxMTMwODIzNDU0IiwidG9rZW4iOiJxOE5XZTRWSi85emU0RjdNZXNyd2k2Y0lMYmw4MmtnNWVjNjRCeE56SnpNMWRYditLaFJFSU5iV2xoYzViNEl5IiwidWluIjoiMjMwOTEwMzU0OCJ9&data=nYcdCBHCI0lOt1ACENZWO6AfqrZ-Ha1TSfx7CBzkhHazin64W38fmSNXGIU0a9oPEvGgEk8ggiqR2imYH4J-pg&svctype=4&tempid=h5_group_info";
+// 1.0.2 去掉了金色加入 QQ 群按钮，加群邀请链接随按钮一起删了（只留群号行，点按复制）。
 
 // 由 UTF-8 C 字串在运行时拼出 NSString（不产生 __cfstring）。
 static inline NSString *GHLKSStr(const char *c) {
@@ -65,6 +64,14 @@ double GHLKSPrefsDouble(const char *key, double defValue);
 void GHLKSPrefsSetDouble(const char *key, double value);
 long GHLKSPrefsInteger(const char *key, long defValue);
 void GHLKSPrefsSetInteger(const char *key, long value);
+
+// 配置导入／导出／恢复默认（v1.0.2 #2）：面板自己的设置存取。
+// 导出把当前域的全部键值写成 Documents/GuHaiLongKuaishou-config.plist；
+// 导入从文件读回（只认 NSNumber 值）；恢复默认清空域里全部键。
+NSString *GHLKSConfigFilePath(void);
+BOOL GHLKSExportConfig(void);
+BOOL GHLKSImportConfigAtPath(NSString *path);
+void GHLKSResetConfig(void);
 
 #ifdef __cplusplus
 }

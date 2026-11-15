@@ -14,6 +14,13 @@ void GHLKSShowPanel(void);
 void GHLKSHidePanel(void);
 BOOL GHLKSPanelIsOpen(void);
 
+// 长按面板（v1.0.2 #23）：在快手主窗口挂一个长按手势，长按视频弹 6 钮网格外壳。
+// 按钮目前是占位（只记日志、提示待接），动作以后再接。
+void GHLKSInstallLongPressPanel(void);
+void GHLKSRemoveLongPressPanel(void);
+void GHLKSShowLongPressPanel(void);
+void GHLKSHideLongPressPanel(void);
+
 #ifdef __cplusplus
 }
 #endif

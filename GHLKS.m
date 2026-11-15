@@ -261,3 +261,69 @@ void GHLKSPrefsSetInteger(const char *key, long value) {
     if (k) CFRelease(k);
     if (d) CFRelease(d);
 }
+
+// 配置导入／导出／恢复默认（v1.0.2 #2）。
+
+NSString *GHLKSConfigFilePath(void) {
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *docs = [paths firstObject];
+    if (!docs) return nil;
+    return [docs stringByAppendingPathComponent:GHLKSStr("GuHaiLongKuaishou-config.plist")];
+}
+
+BOOL GHLKSExportConfig(void) {
+    NSString *path = GHLKSConfigFilePath();
+    if (!path) return NO;
+    CFStringRef d = GHLKSCFStr(kGHLKSPrefsDomain);
+    CFArrayRef keys = CFPreferencesCopyKeyList(d, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+    if (keys) {
+        CFIndex n = CFArrayGetCount(keys);
+        for (CFIndex i = 0; i < n; i++) {
+            CFStringRef k = (CFStringRef)CFArrayGetValueAtIndex(keys, i);
+            CFPropertyListRef v = CFPreferencesCopyValue(k, d, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+            if (v) {
+                [dict setObject:CFBridgingRelease(v) forKey:(__bridge NSString *)k];
+            }
+        }
+        CFRelease(keys);
+    }
+    if (d) CFRelease(d);
+    return [dict writeToFile:path atomically:YES];
+}
+
+BOOL GHLKSImportConfigAtPath(NSString *path) {
+    if (!path) return NO;
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:path];
+    if (!dict || [dict count] == 0) return NO;
+    CFStringRef d = GHLKSCFStr(kGHLKSPrefsDomain);
+    long applied = 0;
+    for (NSString *key in dict) {
+        id value = [dict objectForKey:key];
+        // 只认数字值（本域全是开关与数字）；别的类型跳过，不写进去。
+        if (![value isKindOfClass:[NSNumber class]]) continue;
+        CFStringRef k = GHLKSCFStr([key UTF8String]);
+        if (!k) continue;
+        CFPreferencesSetValue(k, (__bridge CFPropertyListRef)value, d, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        CFRelease(k);
+        applied++;
+    }
+    CFPreferencesSynchronize(d, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    if (d) CFRelease(d);
+    return applied > 0;
+}
+
+void GHLKSResetConfig(void) {
+    CFStringRef d = GHLKSCFStr(kGHLKSPrefsDomain);
+    CFArrayRef keys = CFPreferencesCopyKeyList(d, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    if (keys) {
+        CFIndex n = CFArrayGetCount(keys);
+        for (CFIndex i = 0; i < n; i++) {
+            CFStringRef k = (CFStringRef)CFArrayGetValueAtIndex(keys, i);
+            CFPreferencesSetValue(k, NULL, d, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        }
+        CFRelease(keys);
+    }
+    CFPreferencesSynchronize(d, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    if (d) CFRelease(d);
+}

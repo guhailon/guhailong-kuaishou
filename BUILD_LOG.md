@@ -210,3 +210,95 @@
   （中文字串用字节级计数验，`strings` 默认会把 UTF-8 多字节字元切断，数出来是 0，不可信。）
 - 诚实状态：分享日志与换头像只在本地冒烟验过，未真机验过——分享面板弹不弹得出、相册选图
   存不存得进、换完三处是不是都变新图、恢复默认回不回哆啦A梦，都要真机看。
+
+## v1.0.2 批一 11 项 + 去加群按钮 + #7 闪退修（2026-11-15）
+
+- 版本号 1.0.1 → 1.0.2（control、kGHLKSVersion、关于页文案、全部日志前缀全量替换；
+  源码里 `1.0.1` 只剩关于页注释里一句历史说明，`1.0.0` 已归零）。
+- 批一是 Lee 在 30 项清单里勾中的 11 项（2、23、30 能做 + 5、6、7、11、12、16、18、27 探针）。
+  六个格子页做实（通用设置已是真页）：导航入口、首页、精选、消息、我、播放互动；
+  其他页面仍是规划页；只放本项的行，没多加。
+
+### 逐项结果
+
+| # | 功能 | 状态 |
+|---|---|---|
+| 2 | 配置导入／导出／恢复默认（通用设置） | 做成：`GHLKSExportConfig`（域内全部键 → Documents/GuHaiLongKuaishou-config.plist）+ 系统分享导出；`UIDocumentPickerViewController`（public.property-list）挑文件导入（只认 NSNumber 值，安全域拷贝后读）；恢复默认先弹确认，清空域里全部键并关掉所有探针，头像文件不动；导入后探针开关立即生效（`syncProbeStatesFromPrefs`），悬浮钮位置需重启快手。 |
+| 23 | 长按面板外壳（播放互动） | 做成：主窗口挂 `UILongPressGestureRecognizer`（0.6 秒，`cancelsTouchesInView = NO`，与快手自己的长按手势共存；设置卡片开着、点在悬浮钮上、面板已弹出时不弹）；6 钮网格（保存视频／保存封面／保存音频／复制链接／复制文案／取消）+ 点遮罩关闭；按钮是占位，点按只记日志 `long press action ... (pending)` 并提示「待接」；播放互动页有「预览长按面板」按钮，不用真长按就能看外壳；开关默认开，关掉就摘手势；回前台时没装上就补装。 |
+| 30 | 格子 ivar 探针（诊断反馈） | 做成：第 3 个诊断开关；每 3 秒扒可见 cell（前 2 个不同类）的 ivar——沿类链上溯 3 层记名字与类型编码首字（每层 cap 30），对象型 ivar 只记值的类名（cap 10），不记内容；日志行超 1500 字截断（日志缓冲 2048 上限）。 |
+| 5 | 顶栏探针（导航入口） | 探针就位：每 3 秒找顶栏候选（类名含 Top / Segment / Tab，或分段控件／导航栏，贴顶 + 宽 + 高 28–64），只记类名与子按钮标题；签名没变不刷日志。 |
+| 6 | 底栏项探针（导航入口） | 探针就位：每 3 秒找 UITabBar（记 item 数与标题）+ 贴底自定义容器（记按钮标题）；只记日志。 |
+| 7 | 底栏透明（导航入口） | 确认在位，不重复造开关：诊断页的试验开关照旧（通用遍历找贴底容器改透明，2.5 秒后复查，关开关还原）；导航入口格子里加一行说明指向它 + 显示当前状态。另见下面闪退修。 |
+| 11 | 跳过 AD 章节（首页） | 探针就位：每 3 秒扫可见 cell 的模型属性名，挑出含 chapter / section / skip / segment / advert 的字段；只记字段名，绝不跳过。 |
+| 12 | 精选纯净（精选） | 确认在位，不重做：诊断页的精选探针日志照旧（每 3 秒扫可见 cell）；精选格子里加一行说明指向它 + 显示当前状态。 |
+| 16 | 续火花探针（消息） | 探针就位：每 3 秒数可见 cell 里的头像候选（UIImageView 数）与全窗口输入框候选（UITextField / UITextView 数 + 类名）；只记日志，绝不真发消息。 |
+| 18 | 头像探针（我） | 探针就位：每 3 秒找方形头像图候选（30–120 像素近正方形、有图），记前 5 个的位置与图尺寸；只记日志。 |
+| 27 | 自动连播探针（播放互动） | 探针就位：每 3 秒找类名含 player 的视图（cap 5）与进度条（UIProgressView / UISlider，记第一个的值）；只记日志。 |
+
+- 探针通用：开关住在各自格子；每个探针 3 秒定时器（底栏 2 秒照旧），结果写进
+  GuHaiLongKuaishou.log，签名没变不重复刷；`syncProbeStatesFromPrefs`（%ctor 恢复与
+  配置导入共用）与 `runEnabledProbesOnce`（回前台重跑）统一管理 9 个探针。
+- 去加群按钮（Lee 2026-11-15 12:59 定）：关于页金色「加入QQ群」大按钮与点击处理已删，
+  加群邀请链接常量（`kGHLKSQQGroupJoinURL`，只有按钮在用）随按钮一起删；
+  QQ群 1130823454 行留着（点群号复制照旧），QQ 号行不动；布局往上收，不留空洞。
+  关于页描述文案同步改成 1.0.2 内容。
+
+### #7 闪退根因与修法（Lee 2026-11-15 13:01 报，开一次开关后每次进快手都闪）
+
+- 根因（只读诊断定案，比野指针更严重）：`modifiedViews` 存的是 NSDictionary 记录
+  （键 view → NSValue(nonretainedObject)，键 bg → 原 backgroundColor），但两处读取
+  把它当 NSValue 用、直接发 `nonretainedObjectValue`——去重循环（旧 :131-132）与
+  `recheckBottomBar`（旧 :153-154）。NSDictionary 没有这个方法 → 未捕获异常 →
+  立即闪退。只要探针改过任何一个非 UITabBar 容器，第一次跑（第二容器命中时）就闪，
+  最晚 2.5 秒后的 recheck 必闪。这个 bug 在 v1.0.0 就有，只是开关从来没开过所以没触发。
+- 修法（三件一起做）：
+  1. 两处读取改成按 NSDictionary 取（与 `restoreBottomBar` 原来的写法一致），现在统一
+     走弱键表，不再有这层混淆。
+  2. 野指针二号问题一起修：`modifiedViews` 改成弱键 NSMapTable（视图 → 原背景色，
+     键释放后条目自动消失），`modifiedEffectViews` 改成弱持有 NSHashTable；
+     recheck/restore 里只碰还活着的视图（快照键 + 判空），绝不发消息给野指针。
+     `modifiedTabBars` 本来就是强持有，不用动。
+  3. recheck 只排一个：`bottomBarRecheckPending` 标志，上一轮的还没跑完就不重复排；
+     restore 时清标志，recheck 入口先清标志再判断。
+- 注意：修完之前不要再开底栏透明开关——旧版（源 v99 的 1.0.1）开一次就会闪，
+  而且 prefs 里 `bottomBarProbeEnabled=YES` 会一直留着，%ctor 一读到就自动开探针、
+  每次进快手都闪。1.0.2 装上后第一次进快手会按旧 prefs 自动开一次探针（修好的代码），
+  探针自己会跑通；若仍不放心，可先在诊断页把开关关掉再开。
+
+### 构建教训（本次新增）
+
+- ARC 写回参数：`UISwitch **` / `NSTimer **` 默认是 `__autoreleasing` 写回，传 ivar
+  地址会报错 `passing address of non-local object to __autoreleasing parameter`。
+  写回参数要声明成 `__strong`（如 `UISwitch * __strong *switchOut`）。
+- 同一方法里别用同一个局部变量名声明两次（通用设置页 `resetButton` 重名报错）。
+
+## 验证（Linux 冒烟，/tmp/ghlks102，包验完已留 staging、/tmp 已清）
+
+- `.deb`：`packages/com.guhailong.kuaishou_1.0.2-1+debug_iphoneos-arm64.deb`，
+  **170,818 B，SHA256 `436b3fe7ab4d6de43ee7af4d87168177952400972b3c463dfa677e9a3d2e459f`**，
+  control：Package `com.guhailong.kuaishou`、Version `1.0.2-1+debug`（+debug 是 Linux 冒烟版的后缀，
+  macOS 发布包才是 1.0.2）、Architecture `iphoneos-arm64`、Depends `firmware (>= 15.0), mobilesubstrate`。
+  旧 1.0.1 冒烟包（125,226 B，`1.0.1-2+debug`）与 1.0.0 包都在 `packages/` 里，未动。
+- 内容：dylib 648,512 B、Filter plist 52 B（`com.jiangjia.gif`）、`doraemon.png` 44,177 B；
+  包里没有 `dragon-head.jpg`。
+- dylib：universal arm64（cpusubtype 0）+ arm64e（cpusubtype 2）；`__cfstring` **0 / 0**
+  （python 解析 Mach-O load commands 验过）。
+- 禁 API 全 0（两片）：`CFNotificationCenterAddObserver`、`LSApplicationWorkspace`、
+  `dispatch_get_global_queue`、`keyWindow`、`NSUUID`、`uuid_generate`、`uuid_unparse`。
+- 字串计数（双切片合计，grep -a 字节级数；`strings` 默认会把 UTF-8 多字节字元切断，不可信）：
+  「1.0.2」×92、「1.0.1」×0、「1.0.0」×0、「qun.qq.com」×0、「加入QQ群」×0；
+  新增：「导出配置」×4、「导入配置」×2、「恢复默认配置」×4、「长按菜单」×2、
+  「顶栏探针」×2、「底栏项探针」×2、「AD 章节探针」×2、「续火花探针」×2、
+  「头像探针」×2、「自动连播探针」×2、「格子 ivar 探针」×4、「待接」×4、
+  「预览长按面板」×2、「GuHaiLongKuaishou-config.plist」×2；
+  探针日志字串：「ivar probe」×8、「top bar probe」×6、「tab bar probe」×6、
+  「ad chapter probe」×6、「spark probe」×4、「avatar probe」×6、
+  「autoplay probe」×4、「long press」×10；
+  「1130823454」×4（群号行留着）、「2309103548」×4、「doraemon.png」×4、
+  「custom-avatar.jpg」×2；闪退修字串：「NSMapTable」×8、「NSHashTable」×8、
+  「nonretainedObject」×0（源码里只剩两句注释说明）。
+- 源码层：`@"` 0 个（全部源码文件）；禁 API 字串 0 处。
+- 诚实状态：11 项 + 去加群按钮 + 闪退修只在本地冒烟验过，未真机验过——
+  闪退修是真机才能最终证实的（旧版一开底栏开关就闪，新版要真机开一次开关、
+  进出快手几次、看日志里的 bottom probe / recheck 行）；7 个新探针要等皇上的
+  真机日志才知道找不找得到东西；长按面板外壳、配置导入导出、恢复默认也要真机点一点才算数。

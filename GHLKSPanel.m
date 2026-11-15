@@ -9,6 +9,7 @@ static UIWindow *GHLKSFloatWindow = nil;
 static UIWindow *GHLKSPanelWindow = nil;
 static UINavigationController *GHLKSPanelNav = nil;
 static BOOL GHLKSPanelOpen = NO;
+static UIWindow *GHLKSLongPressWindow = nil; // 长按面板的窗口（v1.0.2 #23）
 
 #pragma mark - 小工具
 
@@ -81,7 +82,9 @@ static CGRect GHLKSCardFrameForBounds(CGRect bounds) {
 }
 
 static void GHLKSShowToast(NSString *text) {
-    if (!GHLKSPanelWindow || !text) return;
+    // 宿主优先用设置卡片窗口；长按面板里点按钮时设置窗可能还没建过，用长按窗口兜底。
+    UIWindow *host = GHLKSPanelWindow ? GHLKSPanelWindow : GHLKSLongPressWindow;
+    if (!host || !text) return;
     UILabel *toast = [[UILabel alloc] init];
     toast.text = text;
     toast.font = [UIFont systemFontOfSize:14];
@@ -93,9 +96,9 @@ static void GHLKSShowToast(NSString *text) {
     CGSize size = [toast sizeThatFits:CGSizeMake(300, 40)];
     CGFloat w = size.width + 32;
     CGFloat h = 36;
-    toast.frame = CGRectMake((CGRectGetWidth(GHLKSPanelWindow.bounds) - w) / 2.0,
-                             CGRectGetHeight(GHLKSPanelWindow.bounds) - 120.0, w, h);
-    [GHLKSPanelWindow addSubview:toast];
+    toast.frame = CGRectMake((CGRectGetWidth(host.bounds) - w) / 2.0,
+                             CGRectGetHeight(host.bounds) - 120.0, w, h);
+    [host addSubview:toast];
     toast.alpha = 0;
     [UIView animateWithDuration:0.2 animations:^{
         toast.alpha = 1;
@@ -142,7 +145,7 @@ static void GHLKSShowToast(NSString *text) {
     if (gesture.state == UIGestureRecognizerStateEnded || gesture.state == UIGestureRecognizerStateCancelled) {
         GHLKSPrefsSetDouble("floatButtonXPercent", center.x / CGRectGetWidth(screen));
         GHLKSPrefsSetDouble("floatButtonYPercent", center.y / CGRectGetHeight(screen));
-        GHLKSLog("v1.0.1 float button moved to %.0f,%.0f", center.x, center.y);
+        GHLKSLog("v1.0.2 float button moved to %.0f,%.0f", center.x, center.y);
     }
 }
 
@@ -193,7 +196,7 @@ void GHLKSInstallFloatingButton(void) {
     [buttonView addGestureRecognizer:pan];
     objc_setAssociatedObject(GHLKSFloatWindow, "handler", handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     GHLKSFloatWindow.hidden = NO;
-    GHLKSLog("v1.0.1 float button installed at %.0f,%.0f image=%s", cx, cy, imagePath ? "yes" : "no");
+    GHLKSLog("v1.0.2 float button installed at %.0f,%.0f image=%s", cx, cy, imagePath ? "yes" : "no");
 }
 
 // 换头像 / 恢复默认后重刷悬浮钮里的图（面板关掉、悬浮钮再出现时就是新图）。
@@ -303,10 +306,48 @@ static void GHLKSRefreshFloatingButtonImage(void) {
 
 @end
 
+// 开关行（标题 + 右侧开关），调用方定 tag；布局时 label 左、开关右（行高 44）。
+// switchOut 必须是 __strong 写回（ivar 地址传给 __autoreleasing 写回参数会报错）。
+static UIView *GHLKSMakeSwitchRow(const char *title, id target, SEL action, BOOL on, UISwitch * __strong *switchOut) {
+    UIView *row = [[UIView alloc] init];
+    row.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.05];
+    row.layer.cornerRadius = 8;
+    UILabel *label = GHLKSMakeLabel(title, 14, NO, [UIColor whiteColor]);
+    label.tag = 4001;
+    [row addSubview:label];
+    UISwitch *sw = [[UISwitch alloc] init];
+    sw.onTintColor = GHLKSGoldColor();
+    sw.on = on;
+    [sw addTarget:target action:action forControlEvents:UIControlEventValueChanged];
+    [row addSubview:sw];
+    if (switchOut) *switchOut = sw;
+    return row;
+}
+
+static void GHLKSLayoutSwitchRow(UIView *row, UISwitch *sw, CGFloat cw, CGFloat y) {
+    row.frame = CGRectMake(16, y, cw - 32, 44);
+    UILabel *label = (UILabel *)[row viewWithTag:4001];
+    label.frame = CGRectMake(12, 0, cw - 120, 44);
+    CGRect sf = sw.frame;
+    sw.frame = CGRectMake(cw - 32 - CGRectGetWidth(sf) - 12, (44 - CGRectGetHeight(sf)) / 2.0, CGRectGetWidth(sf), CGRectGetHeight(sf));
+}
+
 // 子页类声明（定义在文件后面，菜单页先引用）。
 @interface GHLKSPlanningViewController : GHLKSPageViewController
 @end
-@interface GHLKSGeneralSettingsViewController : GHLKSPageViewController <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
+@interface GHLKSGeneralSettingsViewController : GHLKSPageViewController <UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate>
+@end
+@interface GHLKSNavViewController : GHLKSPageViewController
+@end
+@interface GHLKSHomeViewController : GHLKSPageViewController
+@end
+@interface GHLKSFeaturedViewController : GHLKSPageViewController
+@end
+@interface GHLKSMessageViewController : GHLKSPageViewController
+@end
+@interface GHLKSMeViewController : GHLKSPageViewController
+@end
+@interface GHLKSPlaybackViewController : GHLKSPageViewController
 @end
 @interface GHLKSDiagnosticsViewController : GHLKSPageViewController
 @end
@@ -437,13 +478,13 @@ static void GHLKSRefreshFloatingButtonImage(void) {
     UIViewController *vc = nil;
     switch (index) {
         case 0: vc = [[GHLKSGeneralSettingsViewController alloc] initWithPageTitle:"通用设置"]; break;
-        case 1: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"导航入口"]; break;
-        case 2: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"首页设置"]; break;
-        case 3: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"精选设置"]; break;
-        case 4: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"消息设置"]; break;
-        case 5: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"我的设置"]; break;
+        case 1: vc = [[GHLKSNavViewController alloc] initWithPageTitle:"导航入口"]; break;
+        case 2: vc = [[GHLKSHomeViewController alloc] initWithPageTitle:"首页设置"]; break;
+        case 3: vc = [[GHLKSFeaturedViewController alloc] initWithPageTitle:"精选设置"]; break;
+        case 4: vc = [[GHLKSMessageViewController alloc] initWithPageTitle:"消息设置"]; break;
+        case 5: vc = [[GHLKSMeViewController alloc] initWithPageTitle:"我的设置"]; break;
         case 6: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"其他页面"]; break;
-        case 7: vc = [[GHLKSPlanningViewController alloc] initWithPageTitle:"播放互动"]; break;
+        case 7: vc = [[GHLKSPlaybackViewController alloc] initWithPageTitle:"播放互动"]; break;
         case 8: vc = [[GHLKSDiagnosticsViewController alloc] init]; break;
         case 9: vc = [[GHLKSAboutViewController alloc] init]; break;
         default: break;
@@ -532,6 +573,23 @@ static void GHLKSRefreshFloatingButtonImage(void) {
     note.numberOfLines = 0;
     note.tag = 4605;
     [self.content addSubview:note];
+    // v1.0.2 #2：配置导入／导出／恢复默认（面板自己的设置存取，不用 Hook）。
+    UILabel *configTitle = GHLKSMakeLabel("配置", 15, YES, [UIColor whiteColor]);
+    configTitle.tag = 4606;
+    [self.content addSubview:configTitle];
+    UIButton *exportButton = GHLKSMakeDarkButton("导出配置", self, @selector(exportConfigTapped));
+    exportButton.tag = 4607;
+    [self.content addSubview:exportButton];
+    UIButton *importButton = GHLKSMakeDarkButton("导入配置", self, @selector(importConfigTapped));
+    importButton.tag = 4608;
+    [self.content addSubview:importButton];
+    UIButton *resetConfigButton = GHLKSMakeDarkButton("恢复默认配置", self, @selector(resetConfigTapped));
+    resetConfigButton.tag = 4609;
+    [self.content addSubview:resetConfigButton];
+    UILabel *configNote = GHLKSMakeLabel("导出把当前设置存成 .plist 分享出去；导入从文件读回；恢复默认清空全部设置并关掉所有探针，头像不变。导入后探针开关立即生效，悬浮钮位置需重启快手。", 12, NO, [UIColor lightGrayColor]);
+    configNote.numberOfLines = 0;
+    configNote.tag = 4610;
+    [self.content addSubview:configNote];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -558,7 +616,7 @@ static void GHLKSRefreshFloatingButtonImage(void) {
     GHLClearCustomAvatar();
     GHLKSRefreshFloatingButtonImage();
     [self refreshAvatar];
-    GHLKSLog("v1.0.1 custom avatar reset to default");
+    GHLKSLog("v1.0.2 custom avatar reset to default");
     GHLKSShowToast(GHLKSStr("已恢复默认头像"));
 }
 
@@ -576,12 +634,85 @@ static void GHLKSRefreshFloatingButtonImage(void) {
     }
     GHLKSRefreshFloatingButtonImage();
     [self refreshAvatar];
-    GHLKSLog("v1.0.1 custom avatar saved");
+    GHLKSLog("v1.0.2 custom avatar saved");
     GHLKSShowToast(GHLKSStr("头像已更换"));
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
     [picker dismissViewControllerAnimated:YES completion:nil];
+}
+
+// 导出配置：写成 .plist 再交系统分享（照日志页分享日志的做法）。
+- (void)exportConfigTapped {
+    if (!GHLKSExportConfig()) {
+        GHLKSShowToast(GHLKSStr("导出失败"));
+        return;
+    }
+    NSString *path = GHLKSConfigFilePath();
+    NSURL *url = [NSURL fileURLWithPath:path];
+    UIActivityViewController *activityVC = [[UIActivityViewController alloc] initWithActivityItems:[NSArray arrayWithObject:url] applicationActivities:nil];
+    if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+        activityVC.popoverPresentationController.sourceView = self.view;
+        activityVC.popoverPresentationController.sourceRect = self.view.bounds;
+    }
+    [self presentViewController:activityVC animated:YES completion:nil];
+    GHLKSLog("v1.0.2 config exported");
+}
+
+// 导入配置：文件选择器挑 .plist 读回。
+- (void)importConfigTapped {
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
+        initWithDocumentTypes:[NSArray arrayWithObject:GHLKSStr("public.property-list")]
+        inMode:UIDocumentPickerModeOpen];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url = [urls firstObject];
+    if (!url) {
+        GHLKSShowToast(GHLKSStr("没有选到文件"));
+        return;
+    }
+    BOOL ok = NO;
+    if ([url startAccessingSecurityScopedResource]) {
+        NSString *tmp = [[NSTemporaryDirectory() stringByAppendingPathComponent:GHLKSStr("ghlks-import.plist")] copy];
+        [[NSFileManager defaultManager] removeItemAtPath:tmp error:nil];
+        if ([[NSFileManager defaultManager] copyItemAtURL:url toURL:[NSURL fileURLWithPath:tmp] error:nil]) {
+            ok = GHLKSImportConfigAtPath(tmp);
+        }
+        [[NSFileManager defaultManager] removeItemAtPath:tmp error:nil];
+        [url stopAccessingSecurityScopedResource];
+    }
+    if (!ok) {
+        GHLKSShowToast(GHLKSStr("导入失败，不是有效的配置文件"));
+        return;
+    }
+    // 探针开关按新配置立即生效；悬浮钮位置要重启快手才动。
+    [[GHLKSProbe sharedProbe] syncProbeStatesFromPrefs];
+    GHLKSLog("v1.0.2 config imported");
+    GHLKSShowToast(GHLKSStr("配置已导入"));
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+}
+
+// 恢复默认配置：先确认，清空全部设置并关掉所有探针，头像文件不动。
+- (void)resetConfigTapped {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:GHLKSStr("恢复默认配置")
+        message:GHLKSStr("清空全部设置并关掉所有探针，头像不变。")
+        preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *cancel = [UIAlertAction actionWithTitle:GHLKSStr("取消") style:UIAlertActionStyleCancel handler:nil];
+    UIAlertAction *confirm = [UIAlertAction actionWithTitle:GHLKSStr("确定恢复") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+        GHLKSResetConfig();
+        [[GHLKSProbe sharedProbe] syncProbeStatesFromPrefs];
+        [self refreshAvatar];
+        GHLKSLog("v1.0.2 config reset to defaults");
+        GHLKSShowToast(GHLKSStr("已恢复默认配置"));
+    }];
+    [alert addAction:cancel];
+    [alert addAction:confirm];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)layoutPage {
@@ -600,6 +731,369 @@ static void GHLKSRefreshFloatingButtonImage(void) {
     resetButton.frame = CGRectMake(16, y, cw - 32, 44);
     y += 52;
     UILabel *note = (UILabel *)[self.content viewWithTag:4605];
+    CGSize nSize = [note sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    note.frame = CGRectMake(16, y, cw - 32, nSize.height);
+    y += nSize.height + 12;
+    UILabel *configTitle = (UILabel *)[self.content viewWithTag:4606];
+    configTitle.frame = CGRectMake(16, y, cw - 32, 22);
+    y += 30;
+    UIButton *exportButton = (UIButton *)[self.content viewWithTag:4607];
+    exportButton.frame = CGRectMake(16, y, cw - 32, 44);
+    y += 52;
+    UIButton *importButton = (UIButton *)[self.content viewWithTag:4608];
+    importButton.frame = CGRectMake(16, y, cw - 32, 44);
+    y += 52;
+    UIButton *resetConfigButton = (UIButton *)[self.content viewWithTag:4609];
+    resetConfigButton.frame = CGRectMake(16, y, cw - 32, 44);
+    y += 52;
+    UILabel *configNote = (UILabel *)[self.content viewWithTag:4610];
+    CGSize cSize = [configNote sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    configNote.frame = CGRectMake(16, y, cw - 32, cSize.height);
+    y += cSize.height + 20;
+    self.scroll.contentSize = CGSizeMake(cw, y);
+    CGRect cf = self.content.frame;
+    cf.size.height = y;
+    self.content.frame = cf;
+}
+
+@end
+
+#pragma mark - 导航入口页（#5 顶栏探针 / #6 底栏项探针 / #7 说明）
+
+@implementation GHLKSNavViewController {
+    UISwitch *_topBarSwitch;
+    UISwitch *_tabBarSwitch;
+    UILabel *_bottomNote;
+}
+
+- (instancetype)init {
+    return [super initWithPageTitle:"导航入口"];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UIView *rowA = GHLKSMakeSwitchRow("顶栏探针", self, @selector(topBarSwitchChanged:), GHLKSPrefsBool("topBarProbeEnabled", NO), &_topBarSwitch);
+    rowA.tag = 4701;
+    [self.content addSubview:rowA];
+    UIView *rowB = GHLKSMakeSwitchRow("底栏项探针", self, @selector(tabBarSwitchChanged:), GHLKSPrefsBool("tabBarProbeEnabled", NO), &_tabBarSwitch);
+    rowB.tag = 4702;
+    [self.content addSubview:rowB];
+    _bottomNote = GHLKSMakeLabel("", 12, NO, [UIColor lightGrayColor]);
+    _bottomNote.numberOfLines = 0;
+    _bottomNote.tag = 4703;
+    [self.content addSubview:_bottomNote];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    char buf[256];
+    snprintf(buf, sizeof(buf), "底栏透明试验开关在「诊断反馈」页。\n当前状态：%s",
+             [[[GHLKSProbe sharedProbe] bottomBarProbeStatus] UTF8String]);
+    _bottomNote.text = GHLKSStr(buf);
+    _topBarSwitch.on = [[GHLKSProbe sharedProbe] topBarProbeEnabled];
+    _tabBarSwitch.on = [[GHLKSProbe sharedProbe] tabBarProbeEnabled];
+}
+
+- (void)topBarSwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("topBarProbeEnabled", sw.on);
+    [[GHLKSProbe sharedProbe] setTopBarProbeEnabled:sw.on];
+    GHLKSLog("v1.0.2 top bar probe switch %s", sw.on ? "on" : "off");
+}
+
+- (void)tabBarSwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("tabBarProbeEnabled", sw.on);
+    [[GHLKSProbe sharedProbe] setTabBarProbeEnabled:sw.on];
+    GHLKSLog("v1.0.2 tab bar probe switch %s", sw.on ? "on" : "off");
+}
+
+- (void)layoutPage {
+    [super layoutPage];
+    CGFloat cw = CGRectGetWidth(self.content.bounds);
+    if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
+    CGFloat y = 8;
+    UIView *rowA = [self.content viewWithTag:4701];
+    GHLKSLayoutSwitchRow(rowA, _topBarSwitch, cw, y);
+    y += 52;
+    UIView *rowB = [self.content viewWithTag:4702];
+    GHLKSLayoutSwitchRow(rowB, _tabBarSwitch, cw, y);
+    y += 52;
+    CGSize nSize = [_bottomNote sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    _bottomNote.frame = CGRectMake(16, y, cw - 32, nSize.height);
+    y += nSize.height + 20;
+    self.scroll.contentSize = CGSizeMake(cw, y);
+    CGRect cf = self.content.frame;
+    cf.size.height = y;
+    self.content.frame = cf;
+}
+
+@end
+
+#pragma mark - 首页页（#11 AD 章节探针）
+
+@implementation GHLKSHomeViewController {
+    UISwitch *_adChapterSwitch;
+}
+
+- (instancetype)init {
+    return [super initWithPageTitle:"首页设置"];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UIView *rowA = GHLKSMakeSwitchRow("AD 章节探针", self, @selector(adChapterSwitchChanged:), GHLKSPrefsBool("adChapterProbeEnabled", NO), &_adChapterSwitch);
+    rowA.tag = 4711;
+    [self.content addSubview:rowA];
+    UILabel *note = GHLKSMakeLabel("只记章节模型字段，等日志定下识别字段再接，绝不先跳过。", 12, NO, [UIColor lightGrayColor]);
+    note.numberOfLines = 0;
+    note.tag = 4712;
+    [self.content addSubview:note];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    _adChapterSwitch.on = [[GHLKSProbe sharedProbe] adChapterProbeEnabled];
+}
+
+- (void)adChapterSwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("adChapterProbeEnabled", sw.on);
+    [[GHLKSProbe sharedProbe] setAdChapterProbeEnabled:sw.on];
+    GHLKSLog("v1.0.2 ad chapter probe switch %s", sw.on ? "on" : "off");
+}
+
+- (void)layoutPage {
+    [super layoutPage];
+    CGFloat cw = CGRectGetWidth(self.content.bounds);
+    if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
+    CGFloat y = 8;
+    UIView *rowA = [self.content viewWithTag:4711];
+    GHLKSLayoutSwitchRow(rowA, _adChapterSwitch, cw, y);
+    y += 52;
+    UILabel *note = (UILabel *)[self.content viewWithTag:4712];
+    CGSize nSize = [note sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    note.frame = CGRectMake(16, y, cw - 32, nSize.height);
+    y += nSize.height + 20;
+    self.scroll.contentSize = CGSizeMake(cw, y);
+    CGRect cf = self.content.frame;
+    cf.size.height = y;
+    self.content.frame = cf;
+}
+
+@end
+
+#pragma mark - 精选页（#12 已在诊断页，确认在位）
+
+@implementation GHLKSFeaturedViewController {
+    UILabel *_feedNote;
+}
+
+- (instancetype)init {
+    return [super initWithPageTitle:"精选设置"];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    _feedNote = GHLKSMakeLabel("", 13, NO, [UIColor whiteColor]);
+    _feedNote.numberOfLines = 0;
+    _feedNote.tag = 4721;
+    [self.content addSubview:_feedNote];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    char buf[256];
+    snprintf(buf, sizeof(buf), "精选纯净探针开关在「诊断反馈」页。\n当前状态：%s",
+             [[[GHLKSProbe sharedProbe] feedProbeStatus] UTF8String]);
+    _feedNote.text = GHLKSStr(buf);
+}
+
+- (void)layoutPage {
+    [super layoutPage];
+    CGFloat cw = CGRectGetWidth(self.content.bounds);
+    if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
+    CGSize nSize = [_feedNote sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    _feedNote.frame = CGRectMake(16, 12, cw - 32, nSize.height);
+    CGFloat y = 12 + nSize.height + 20;
+    self.scroll.contentSize = CGSizeMake(cw, y);
+    CGRect cf = self.content.frame;
+    cf.size.height = y;
+    self.content.frame = cf;
+}
+
+@end
+
+#pragma mark - 消息页（#16 续火花探针）
+
+@implementation GHLKSMessageViewController {
+    UISwitch *_sparkSwitch;
+}
+
+- (instancetype)init {
+    return [super initWithPageTitle:"消息设置"];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UIView *rowA = GHLKSMakeSwitchRow("续火花探针", self, @selector(sparkSwitchChanged:), GHLKSPrefsBool("sparkProbeEnabled", NO), &_sparkSwitch);
+    rowA.tag = 4731;
+    [self.content addSubview:rowA];
+    UILabel *note = GHLKSMakeLabel("只记日志，绝不真发消息；先确认头像与输入框找不找得到。", 12, NO, [UIColor lightGrayColor]);
+    note.numberOfLines = 0;
+    note.tag = 4732;
+    [self.content addSubview:note];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    _sparkSwitch.on = [[GHLKSProbe sharedProbe] sparkProbeEnabled];
+}
+
+- (void)sparkSwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("sparkProbeEnabled", sw.on);
+    [[GHLKSProbe sharedProbe] setSparkProbeEnabled:sw.on];
+    GHLKSLog("v1.0.2 spark probe switch %s", sw.on ? "on" : "off");
+}
+
+- (void)layoutPage {
+    [super layoutPage];
+    CGFloat cw = CGRectGetWidth(self.content.bounds);
+    if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
+    CGFloat y = 8;
+    UIView *rowA = [self.content viewWithTag:4731];
+    GHLKSLayoutSwitchRow(rowA, _sparkSwitch, cw, y);
+    y += 52;
+    UILabel *note = (UILabel *)[self.content viewWithTag:4732];
+    CGSize nSize = [note sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    note.frame = CGRectMake(16, y, cw - 32, nSize.height);
+    y += nSize.height + 20;
+    self.scroll.contentSize = CGSizeMake(cw, y);
+    CGRect cf = self.content.frame;
+    cf.size.height = y;
+    self.content.frame = cf;
+}
+
+@end
+
+#pragma mark - 我的页（#18 头像探针）
+
+@implementation GHLKSMeViewController {
+    UISwitch *_avatarSwitch;
+}
+
+- (instancetype)init {
+    return [super initWithPageTitle:"我的设置"];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UIView *rowA = GHLKSMakeSwitchRow("头像探针", self, @selector(avatarSwitchChanged:), GHLKSPrefsBool("avatarProbeEnabled", NO), &_avatarSwitch);
+    rowA.tag = 4741;
+    [self.content addSubview:rowA];
+    UILabel *note = GHLKSMakeLabel("只记日志；先确认头像视图与图片地址能不能通用拿到。", 12, NO, [UIColor lightGrayColor]);
+    note.numberOfLines = 0;
+    note.tag = 4742;
+    [self.content addSubview:note];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    _avatarSwitch.on = [[GHLKSProbe sharedProbe] avatarProbeEnabled];
+}
+
+- (void)avatarSwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("avatarProbeEnabled", sw.on);
+    [[GHLKSProbe sharedProbe] setAvatarProbeEnabled:sw.on];
+    GHLKSLog("v1.0.2 avatar probe switch %s", sw.on ? "on" : "off");
+}
+
+- (void)layoutPage {
+    [super layoutPage];
+    CGFloat cw = CGRectGetWidth(self.content.bounds);
+    if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
+    CGFloat y = 8;
+    UIView *rowA = [self.content viewWithTag:4741];
+    GHLKSLayoutSwitchRow(rowA, _avatarSwitch, cw, y);
+    y += 52;
+    UILabel *note = (UILabel *)[self.content viewWithTag:4742];
+    CGSize nSize = [note sizeThatFits:CGSizeMake(cw - 32, 1000)];
+    note.frame = CGRectMake(16, y, cw - 32, nSize.height);
+    y += nSize.height + 20;
+    self.scroll.contentSize = CGSizeMake(cw, y);
+    CGRect cf = self.content.frame;
+    cf.size.height = y;
+    self.content.frame = cf;
+}
+
+@end
+
+#pragma mark - 播放互动页（#23 长按面板外壳 / #27 自动连播探针）
+
+@implementation GHLKSPlaybackViewController {
+    UISwitch *_longPressSwitch;
+    UISwitch *_autoPlaySwitch;
+}
+
+- (instancetype)init {
+    return [super initWithPageTitle:"播放互动"];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UIView *rowA = GHLKSMakeSwitchRow("长按弹出面板", self, @selector(longPressSwitchChanged:), GHLKSPrefsBool("longPressPanelEnabled", YES), &_longPressSwitch);
+    rowA.tag = 4751;
+    [self.content addSubview:rowA];
+    UIButton *previewButton = GHLKSMakeDarkButton("预览长按面板", self, @selector(previewLongPressTapped));
+    previewButton.tag = 4752;
+    [self.content addSubview:previewButton];
+    UIView *rowB = GHLKSMakeSwitchRow("自动连播探针", self, @selector(autoPlaySwitchChanged:), GHLKSPrefsBool("autoPlayProbeEnabled", NO), &_autoPlaySwitch);
+    rowB.tag = 4753;
+    [self.content addSubview:rowB];
+    UILabel *note = GHLKSMakeLabel("长按面板的 6 个按钮目前是占位，点按只记日志、提示「待接」，动作以后再接。", 12, NO, [UIColor lightGrayColor]);
+    note.numberOfLines = 0;
+    note.tag = 4754;
+    [self.content addSubview:note];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    _longPressSwitch.on = GHLKSPrefsBool("longPressPanelEnabled", YES);
+    _autoPlaySwitch.on = [[GHLKSProbe sharedProbe] autoPlayProbeEnabled];
+}
+
+- (void)longPressSwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("longPressPanelEnabled", sw.on);
+    if (sw.on) {
+        GHLKSInstallLongPressPanel();
+    } else {
+        GHLKSRemoveLongPressPanel();
+    }
+    GHLKSLog("v1.0.2 long press panel switch %s", sw.on ? "on" : "off");
+}
+
+- (void)previewLongPressTapped {
+    GHLKSShowLongPressPanel();
+}
+
+- (void)autoPlaySwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("autoPlayProbeEnabled", sw.on);
+    [[GHLKSProbe sharedProbe] setAutoPlayProbeEnabled:sw.on];
+    GHLKSLog("v1.0.2 autoplay probe switch %s", sw.on ? "on" : "off");
+}
+
+- (void)layoutPage {
+    [super layoutPage];
+    CGFloat cw = CGRectGetWidth(self.content.bounds);
+    if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
+    CGFloat y = 8;
+    UIView *rowA = [self.content viewWithTag:4751];
+    GHLKSLayoutSwitchRow(rowA, _longPressSwitch, cw, y);
+    y += 52;
+    UIButton *previewButton = (UIButton *)[self.content viewWithTag:4752];
+    previewButton.frame = CGRectMake(16, y, cw - 32, 44);
+    y += 52;
+    UIView *rowB = [self.content viewWithTag:4753];
+    GHLKSLayoutSwitchRow(rowB, _autoPlaySwitch, cw, y);
+    y += 52;
+    UILabel *note = (UILabel *)[self.content viewWithTag:4754];
     CGSize nSize = [note sizeThatFits:CGSizeMake(cw - 32, 1000)];
     note.frame = CGRectMake(16, y, cw - 32, nSize.height);
     y += nSize.height + 20;
@@ -629,6 +1123,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     NSMutableArray *_valueLabels;
     UISwitch *_bottomBarSwitch;
     UISwitch *_feedSwitch;
+    UISwitch *_ivarSwitch;
 }
 
 - (instancetype)init {
@@ -639,9 +1134,9 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     [super viewDidLoad];
     _valueLabels = [NSMutableArray array];
     static const char *keys[] = {
-        "插件版本", "快手版本", "底栏探针", "精选探针", "打开面板",
+        "插件版本", "快手版本", "底栏探针", "精选探针", "格子 ivar", "打开面板",
     };
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         UIView *row = [[UIView alloc] init];
         row.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.05];
         row.layer.cornerRadius = 8;
@@ -683,6 +1178,20 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     [_feedSwitch addTarget:self action:@selector(feedSwitchChanged:) forControlEvents:UIControlEventValueChanged];
     [rowB addSubview:_feedSwitch];
     rowB.tag = 4202;
+    // v1.0.2 #30：格子 ivar 探针开关。
+    UIView *rowC = [[UIView alloc] init];
+    rowC.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.05];
+    rowC.layer.cornerRadius = 8;
+    [self.content addSubview:rowC];
+    UILabel *labelC = GHLKSMakeLabel("格子 ivar 探针", 14, NO, [UIColor whiteColor]);
+    [rowC addSubview:labelC];
+    labelC.tag = 4001;
+    _ivarSwitch = [[UISwitch alloc] init];
+    _ivarSwitch.onTintColor = GHLKSGoldColor();
+    _ivarSwitch.on = GHLKSPrefsBool("ivarProbeEnabled", NO);
+    [_ivarSwitch addTarget:self action:@selector(ivarSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+    [rowC addSubview:_ivarSwitch];
+    rowC.tag = 4203;
     // 两个按钮。
     UIButton *copyButton = GHLKSMakeDarkButton("复制状态文本", self, @selector(copyStatusTapped));
     copyButton.tag = 4301;
@@ -702,7 +1211,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
 }
 
 - (void)refreshValues {
-    if ([_valueLabels count] < 5) return;
+    if ([_valueLabels count] < 6) return;
     char openBuf[64];
     snprintf(openBuf, sizeof(openBuf), "%ld 次", GHLKSPrefsInteger("panelOpenCount", 0));
     NSArray *values = [NSArray arrayWithObjects:
@@ -710,41 +1219,51 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
         GHLKSAppVersionString(),
         [[GHLKSProbe sharedProbe] bottomBarProbeStatus],
         [[GHLKSProbe sharedProbe] feedProbeStatus],
+        [[GHLKSProbe sharedProbe] ivarProbeStatus],
         GHLKSStr(openBuf),
         nil];
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         UILabel *value = [_valueLabels objectAtIndex:i];
         value.text = [values objectAtIndex:i];
     }
     _bottomBarSwitch.on = [[GHLKSProbe sharedProbe] bottomBarProbeEnabled];
     _feedSwitch.on = [[GHLKSProbe sharedProbe] feedProbeEnabled];
+    _ivarSwitch.on = [[GHLKSProbe sharedProbe] ivarProbeEnabled];
 }
 
 - (void)bottomBarSwitchChanged:(UISwitch *)sw {
     GHLKSPrefsSetBool("bottomBarProbeEnabled", sw.on);
     [[GHLKSProbe sharedProbe] setBottomBarProbeEnabled:sw.on];
-    GHLKSLog("v1.0.1 bottom probe switch %s", sw.on ? "on" : "off");
+    GHLKSLog("v1.0.2 bottom probe switch %s", sw.on ? "on" : "off");
     [self refreshValues];
 }
 
 - (void)feedSwitchChanged:(UISwitch *)sw {
     GHLKSPrefsSetBool("feedProbeEnabled", sw.on);
     [[GHLKSProbe sharedProbe] setFeedProbeEnabled:sw.on];
-    GHLKSLog("v1.0.1 feed probe switch %s", sw.on ? "on" : "off");
+    GHLKSLog("v1.0.2 feed probe switch %s", sw.on ? "on" : "off");
+    [self refreshValues];
+}
+
+- (void)ivarSwitchChanged:(UISwitch *)sw {
+    GHLKSPrefsSetBool("ivarProbeEnabled", sw.on);
+    [[GHLKSProbe sharedProbe] setIvarProbeEnabled:sw.on];
+    GHLKSLog("v1.0.2 ivar probe switch %s", sw.on ? "on" : "off");
     [self refreshValues];
 }
 
 - (void)copyStatusTapped {
     char openBuf[64];
     snprintf(openBuf, sizeof(openBuf), "%ld", GHLKSPrefsInteger("panelOpenCount", 0));
-    NSString *text = [NSString stringWithFormat:GHLKSStr("顾海龙快手 %@\n快手 %@\n底栏：%@\n精选探针：%@\n打开面板：%@ 次"),
+    NSString *text = [NSString stringWithFormat:GHLKSStr("顾海龙快手 %@\n快手 %@\n底栏：%@\n精选探针：%@\n格子 ivar：%@\n打开面板：%@ 次"),
         GHLKSStr(kGHLKSVersion),
         GHLKSAppVersionString(),
         [[GHLKSProbe sharedProbe] bottomBarProbeStatus],
         [[GHLKSProbe sharedProbe] feedProbeStatus],
+        [[GHLKSProbe sharedProbe] ivarProbeStatus],
         GHLKSStr(openBuf)];
     [UIPasteboard generalPasteboard].string = text;
-    GHLKSLog("v1.0.1 status text copied");
+    GHLKSLog("v1.0.2 status text copied");
     GHLKSShowToast(GHLKSStr("已复制状态文本"));
 }
 
@@ -758,7 +1277,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     CGFloat cw = CGRectGetWidth(self.content.bounds);
     if (cw <= 0) cw = CGRectGetWidth(self.card.frame);
     CGFloat y = 8;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         UIView *row = [self.content viewWithTag:4100 + i];
         row.frame = CGRectMake(16, y, cw - 32, 40);
         UILabel *key = (UILabel *)[row viewWithTag:4001];
@@ -767,12 +1286,12 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
         value.frame = CGRectMake(112, 0, cw - 32 - 124, 40);
         y += 48;
     }
-    for (int t = 0; t < 2; t++) {
+    for (int t = 0; t < 3; t++) {
         UIView *row = [self.content viewWithTag:4201 + t];
         row.frame = CGRectMake(16, y, cw - 32, 44);
         UILabel *label = (UILabel *)[row viewWithTag:4001];
         label.frame = CGRectMake(12, 0, cw - 120, 44);
-        UISwitch *sw = (t == 0) ? _bottomBarSwitch : _feedSwitch;
+        UISwitch *sw = (t == 0) ? _bottomBarSwitch : (t == 1) ? _feedSwitch : _ivarSwitch;
         CGRect sf = sw.frame;
         sw.frame = CGRectMake(cw - 32 - CGRectGetWidth(sf) - 12, (44 - CGRectGetHeight(sf)) / 2.0, CGRectGetWidth(sf), CGRectGetHeight(sf));
         y += 52;
@@ -901,7 +1420,6 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     UILabel *_disclaimerLabel;
     UIView *_qqRow;
     UIView *_groupRow;
-    UIButton *_joinGroupButton;
 }
 
 - (instancetype)init {
@@ -939,7 +1457,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     ver.textAlignment = NSTextAlignmentCenter;
     ver.tag = 4504;
     [self.content addSubview:ver];
-    _descLabel = GHLKSMakeLabel("顾海龙快手 1.0.1：深色毛玻璃设置卡片、悬浮入口、诊断反馈与关于页。通用设置可换头像（默认哆啦A梦），日志页可分享日志，关于页新增 QQ 群行与加入 QQ 群按钮。精选纯净与底栏透明目前仅为探针，待快手 14.10.10 类 dump 后再接实效。免费使用，仅限学习交流。", 13, NO, [UIColor whiteColor]);
+    _descLabel = GHLKSMakeLabel("顾海龙快手 1.0.2：通用设置可换头像、导入导出配置；导航入口、首页、精选、消息、我、播放互动六个格子已做实（长按面板外壳 + 7 个探针，只记日志）；诊断页加格子 ivar 探针；底栏透明探针闪退已修。关于页留 QQ 群号一行，点按复制。精选纯净与底栏透明目前仅为探针，待快手 14.10.10 类 dump 后再接实效。免费使用，仅限学习交流。", 13, NO, [UIColor whiteColor]);
     _descLabel.numberOfLines = 0;
     _descLabel.tag = 4505;
     [self.content addSubview:_descLabel];
@@ -957,7 +1475,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     [_qqRow addSubview:qqLabel];
     UITapGestureRecognizer *qqTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(qqTapped)];
     [_qqRow addGestureRecognizer:qqTap];
-    // 1.0.1：QQ 群行（照抖音的做法，点群号复制）+ 金色加入 QQ 群大按钮。
+    // 1.0.1：QQ 群行（照抖音的做法，点群号复制）；1.0.2 去掉了金色加入 QQ 群大按钮（太碍眼），只留群号行。
     _groupRow = [[UIView alloc] init];
     _groupRow.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.05];
     _groupRow.layer.cornerRadius = 8;
@@ -968,9 +1486,6 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     [_groupRow addSubview:groupLabel];
     UITapGestureRecognizer *groupTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(groupTapped)];
     [_groupRow addGestureRecognizer:groupTap];
-    _joinGroupButton = GHLKSMakeGoldButton("加入QQ群", self, @selector(joinGroupTapped));
-    _joinGroupButton.tag = 4511;
-    [self.content addSubview:_joinGroupButton];
 }
 
 - (void)qqTapped {
@@ -981,21 +1496,6 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
 - (void)groupTapped {
     [UIPasteboard generalPasteboard].string = GHLKSStr(kGHLKSQQGroupNumber);
     GHLKSShowToast(GHLKSStr("已复制群号"));
-}
-
-- (void)joinGroupTapped {
-    NSURL *url = [NSURL URLWithString:GHLKSStr(kGHLKSQQGroupJoinURL)];
-    if (!url) {
-        GHLKSShowToast(GHLKSStr("打开失败，请检查网络后重试"));
-        return;
-    }
-    [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:^(BOOL success) {
-        if (!success) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                GHLKSShowToast(GHLKSStr("打开失败，请检查网络后重试"));
-            });
-        }
-    }];
 }
 
 - (void)layoutPage {
@@ -1031,9 +1531,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     _groupRow.frame = CGRectMake(16, y, cw - 32, 44);
     UILabel *groupLabel = (UILabel *)[_groupRow viewWithTag:4510];
     groupLabel.frame = CGRectMake(12, 0, cw - 56, 44);
-    y += 44 + 12;
-    _joinGroupButton.frame = CGRectMake(16, y, cw - 32, 48);
-    y += 48 + 20;
+    y += 44 + 20;
     self.scroll.contentSize = CGSizeMake(cw, y);
     CGRect cf = self.content.frame;
     cf.size.height = y;
@@ -1092,7 +1590,7 @@ void GHLKSShowPanel(void) {
         GHLKSPanelNav.view.alpha = 1;
         GHLKSPanelNav.view.transform = CGAffineTransformIdentity;
     } completion:nil];
-    GHLKSLog("v1.0.1 panel opened (%ld)", count);
+    GHLKSLog("v1.0.2 panel opened (%ld)", count);
 }
 
 void GHLKSHidePanel(void) {
@@ -1106,9 +1604,150 @@ void GHLKSHidePanel(void) {
         GHLKSPanelNav.view.transform = CGAffineTransformIdentity;
         if (GHLKSFloatWindow) GHLKSFloatWindow.hidden = NO;
     }];
-    GHLKSLog("v1.0.1 panel closed");
+    GHLKSLog("v1.0.2 panel closed");
 }
 
 BOOL GHLKSPanelIsOpen(void) {
     return GHLKSPanelOpen;
+}
+
+#pragma mark - 长按面板（v1.0.2 #23，6 钮网格外壳）
+
+static UILongPressGestureRecognizer *GHLKSLongPressRecognizer = nil;
+
+@interface GHLKSLongPressHandler : NSObject <UIGestureRecognizerDelegate>
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture;
+@end
+
+@implementation GHLKSLongPressHandler
+
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+    if (GHLKSPanelIsOpen()) return;
+    if (GHLKSLongPressWindow && !GHLKSLongPressWindow.hidden) return;
+    // 点在悬浮钮上不弹（那是开面板的手势）。
+    if (GHLKSFloatWindow && !GHLKSFloatWindow.hidden) {
+        CGPoint p = [gesture locationInView:nil];
+        if (CGRectContainsPoint(GHLKSFloatWindow.frame, p)) return;
+    }
+    GHLKSShowLongPressPanel();
+}
+
+// 和快手自己的长按手势共存，不抢触摸。
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gr shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return YES;
+}
+
+@end
+
+@interface GHLKSLongPressDimHandler : NSObject
+- (void)dimTapped:(UITapGestureRecognizer *)gesture;
+@end
+
+@implementation GHLKSLongPressDimHandler
+- (void)dimTapped:(UITapGestureRecognizer *)gesture {
+    if (gesture.state == UIGestureRecognizerStateRecognized) {
+        GHLKSHideLongPressPanel();
+    }
+}
+@end
+
+@interface GHLKSLongPressButtonHandler : NSObject
+- (void)buttonTapped:(UIButton *)sender;
+@end
+
+@implementation GHLKSLongPressButtonHandler
+- (void)buttonTapped:(UIButton *)sender {
+    long idx = sender.tag - 5000;
+    if (idx < 0 || idx > 5) return;
+    if (idx == 5) {
+        GHLKSHideLongPressPanel();
+        return;
+    }
+    // 6 个按钮目前是占位：只记日志、提示待接，动作以后再接。
+    static const char *names[] = { "save video", "save cover", "save audio", "copy link", "copy text", NULL };
+    GHLKSLog("v1.0.2 long press action %s (pending)", names[idx]);
+    GHLKSShowToast(GHLKSStr("待接"));
+}
+@end
+
+static void GHLKSSetupLongPressWindow(void) {
+    CGRect screen = [UIScreen mainScreen].bounds;
+    GHLKSLongPressWindow = [[UIWindow alloc] initWithFrame:screen];
+    GHLKSLongPressWindow.windowLevel = UIWindowLevelAlert;
+    GHLKSLongPressWindow.backgroundColor = [UIColor clearColor];
+    UIViewController *holder = [[UIViewController alloc] init];
+    holder.view.backgroundColor = [UIColor clearColor];
+    UIView *dim = [[UIView alloc] initWithFrame:holder.view.bounds];
+    dim.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5];
+    dim.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    GHLKSLongPressDimHandler *dimHandler = [[GHLKSLongPressDimHandler alloc] init];
+    UITapGestureRecognizer *dimTap = [[UITapGestureRecognizer alloc] initWithTarget:dimHandler action:@selector(dimTapped:)];
+    [dim addGestureRecognizer:dimTap];
+    objc_setAssociatedObject(GHLKSLongPressWindow, "dimHandler", dimHandler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [holder.view addSubview:dim];
+    CGFloat cardW = CGRectGetWidth(screen) - 64.0;
+    if (cardW > 320.0) cardW = 320.0;
+    CGFloat cardH = 308.0;
+    UIVisualEffectView *card = GHLKSMakeCardView();
+    card.frame = CGRectMake((CGRectGetWidth(screen) - cardW) / 2.0, (CGRectGetHeight(screen) - cardH) / 2.0, cardW, cardH);
+    card.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+    UILabel *title = GHLKSMakeLabel("长按菜单", 16, YES, GHLKSGoldColor());
+    title.textAlignment = NSTextAlignmentCenter;
+    title.frame = CGRectMake(0, 14, cardW, 24);
+    [card.contentView addSubview:title];
+    static const char *titles[] = { "保存视频", "保存封面", "保存音频", "复制链接", "复制文案", "取消", NULL };
+    GHLKSLongPressButtonHandler *handler = [[GHLKSLongPressButtonHandler alloc] init];
+    CGFloat gap = 10.0;
+    CGFloat btnW = (cardW - 32.0 - gap) / 2.0;
+    CGFloat btnH = 44.0;
+    for (int i = 0; i < 6; i++) {
+        int row = i / 2;
+        int col = i % 2;
+        UIButton *button = GHLKSMakeDarkButton(titles[i], handler, @selector(buttonTapped:));
+        button.tag = 5000 + i;
+        button.frame = CGRectMake(16 + col * (btnW + gap), 52 + row * (btnH + gap), btnW, btnH);
+        [card.contentView addSubview:button];
+    }
+    objc_setAssociatedObject(GHLKSLongPressWindow, "buttonHandler", handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [holder.view addSubview:card];
+    GHLKSLongPressWindow.rootViewController = holder;
+    GHLKSLongPressWindow.hidden = YES;
+}
+
+void GHLKSInstallLongPressPanel(void) {
+    // 主窗口换过就重装（手势还挂在旧窗口上就等于没装）。
+    if (GHLKSLongPressRecognizer && GHLKSLongPressRecognizer.view) return;
+    GHLKSLongPressRecognizer = nil;
+    UIWindow *win = [GHLKSProbe mainAppWindow];
+    if (!win) return;
+    GHLKSLongPressHandler *handler = [[GHLKSLongPressHandler alloc] init];
+    UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:handler action:@selector(handleLongPress:)];
+    lp.minimumPressDuration = 0.6;
+    lp.cancelsTouchesInView = NO;
+    lp.delegate = handler;
+    [win addGestureRecognizer:lp];
+    objc_setAssociatedObject(win, "longPressHandler", handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    GHLKSLongPressRecognizer = lp;
+    GHLKSLog("v1.0.2 long press panel installed");
+}
+
+void GHLKSRemoveLongPressPanel(void) {
+    if (!GHLKSLongPressRecognizer) return;
+    UIView *view = GHLKSLongPressRecognizer.view;
+    if (view) [view removeGestureRecognizer:GHLKSLongPressRecognizer];
+    GHLKSLongPressRecognizer = nil;
+    GHLKSHideLongPressPanel();
+    GHLKSLog("v1.0.2 long press panel removed");
+}
+
+void GHLKSShowLongPressPanel(void) {
+    if (!GHLKSLongPressWindow) GHLKSSetupLongPressWindow();
+    GHLKSLongPressWindow.hidden = NO;
+    GHLKSLog("v1.0.2 long press panel shown");
+}
+
+void GHLKSHideLongPressPanel(void) {
+    if (!GHLKSLongPressWindow) return;
+    GHLKSLongPressWindow.hidden = YES;
 }
