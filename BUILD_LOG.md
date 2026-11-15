@@ -302,3 +302,11 @@
   闪退修是真机才能最终证实的（旧版一开底栏开关就闪，新版要真机开一次开关、
   进出快手几次、看日志里的 bottom probe / recheck 行）；7 个新探针要等皇上的
   真机日志才知道找不找得到东西；长按面板外壳、配置导入导出、恢复默认也要真机点一点才算数。
+
+## v1.0.2 上源（2026-11-15 13:36，源 v102）
+
+- 皇上 13:11 批推＋编＋部署；主聊天推 6e5ed9d（远端 main 已是 6e5ed9d），macOS run 43680051863 成功（约 9 分钟）；发布包 133,044 B，SHA256 b663c8598…，Version 1.0.2，universal arm64+arm64e（PAC00），__cfstring 0；边聊独立验过发布包（dylib 625,392 B，NSMapTable ×8，nonretainedObject 0，加入QQ群/qun.qq.com 0）。
+- 部署前核 live = v101（抖音 1.0.24、分屏 1.0.58、快手 1.0.1，16 包，live Packages SHA256 6182a3e3…）。
+- 部署：debs/ 里 1.0.1 换成 1.0.2；Packages 只换快手一个条目（字段顺序照旧文件，不加 SHA512）；Packages.gz/bz2/zst + Release 重算；wrangler 部署（cloudflare_deploy.py）；live 验过：live Packages SHA256 705bab96…，16 包，快手 1.0.2 Size 133044、SHA256 b663c8598…，抖音 1.0.24＋分屏 1.0.58 没动，live .deb SHA 一致，Packages.zst 解压 == Packages。
+- 教训：不要整份用 `apt-ftparchive packages debs/` 重写 Packages——它的字段顺序、SHA512、SileoDepiction 大小写都跟本源现有格式对不上，只会把 16 个包全改乱；以后只手术式替换单个条目再重算压缩包与 Release。zstd 没有命令行，用 Python `zstandard` 模块压。
+- 真机测待皇上：底栏透明开关开一次、进出快手几次、看日志 bottom probe / recheck 行；7 个新探针＋长按面板＋配置导入导出也要真机日志。

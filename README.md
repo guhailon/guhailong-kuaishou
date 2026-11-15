@@ -1,5 +1,7 @@
 # 顾海龙快手 — GuHaiLongKuaishou
 
+**开源：源码就在这个仓库里，免费使用，仅限学习交流。**
+
 原创 Theos 插件工程。目标机：iPhone 11 / iOS 16.5 / Dopamine (rootless)。
 目标快手版本：**14.10.10 / build 10089**（Lee 2026-11-15 确认）。
 
