@@ -42,8 +42,8 @@ NSString *GHLKSLogTail(long maxBytes);
 // 清空日志。
 void GHLKSClearLog(void);
 
-// 龙头图路径：优先 /var/jb/...（rootless），再试 /Library/...；找不到返回 nil。
-NSString *GHLKSDragonImagePath(void);
+// 哆啦A梦图路径：优先 /var/jb/...（rootless），再试 /Library/...；找不到返回 nil。
+NSString *GHLKSLogoImagePath(void);
 
 // 快手自身版本字串，如 14.10.10 (10089)；读不到时返回目标版本。
 NSString *GHLKSAppVersionString(void);

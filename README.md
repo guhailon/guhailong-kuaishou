@@ -19,8 +19,8 @@
   设置（CFPreferences 域 com.guhailong.kuaishou）、路径。
 - `GHLKSProbe.h/.m` — 底栏透明探针（通用 UIKit 遍历）+ 精选探针日志（只记类名与模型属性名）。
 - `GHLKSPanel.h/.m` — 悬浮钮 + 设置卡片（菜单、规划页、诊断页、日志页、关于页）。
-- `layout/` — 龙头图（由 `workspace/your_files/gu-hai-long-logo/header-logo-dragon-800.jpg`
-  缩到 256px 而来），装到 `/var/jb/Library/Application Support/GuHaiLongKuaishou/dragon-head.jpg`。
+- `layout/` — 哆啦A梦图（分屏插件同款 `doraemon-button@3x.png`，168×168 PNG），
+  装到 `/var/jb/Library/Application Support/GuHaiLongKuaishou/doraemon.png`。
 - `GuHaiLongKuaishou.plist` — Filter：`com.jiangjia.gif`（公开资料值，上真机前须用 Filza 核对）。
 
 ## 规则

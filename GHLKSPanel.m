@@ -164,7 +164,7 @@ void GHLKSInstallFloatingButton(void) {
     buttonView.layer.masksToBounds = YES;
     buttonView.layer.borderColor = [[GHLKSGoldColor() colorWithAlphaComponent:0.9] CGColor];
     buttonView.layer.borderWidth = 2.0;
-    NSString *imagePath = GHLKSDragonImagePath();
+    NSString *imagePath = GHLKSLogoImagePath();
     if (imagePath) {
         UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
         if (image) {
@@ -298,8 +298,8 @@ void GHLKSInstallFloatingButton(void) {
     self.view.backgroundColor = [UIColor clearColor];
     _card = GHLKSMakeCardView();
     [self.view addSubview:_card];
-    // 头：龙头图 + 金字标题 + 英文小字 + 版本行。
-    NSString *imagePath = GHLKSDragonImagePath();
+    // 头：哆啦A梦图 + 金字标题 + 英文小字 + 版本行。
+    NSString *imagePath = GHLKSLogoImagePath();
     if (imagePath) {
         UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
         if (image) {
@@ -733,7 +733,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    NSString *imagePath = GHLKSDragonImagePath();
+    NSString *imagePath = GHLKSLogoImagePath();
     if (imagePath) {
         UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
         if (image) {

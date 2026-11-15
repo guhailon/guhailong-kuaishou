@@ -82,10 +82,10 @@ void GHLKSClearLog(void) {
     GHLKSLog("log cleared by user");
 }
 
-NSString *GHLKSDragonImagePath(void) {
+NSString *GHLKSLogoImagePath(void) {
     static const char *candidates[] = {
-        "/var/jb/Library/Application Support/GuHaiLongKuaishou/dragon-head.jpg",
-        "/Library/Application Support/GuHaiLongKuaishou/dragon-head.jpg",
+        "/var/jb/Library/Application Support/GuHaiLongKuaishou/doraemon.png",
+        "/Library/Application Support/GuHaiLongKuaishou/doraemon.png",
         NULL
     };
     NSFileManager *fm = [NSFileManager defaultManager];

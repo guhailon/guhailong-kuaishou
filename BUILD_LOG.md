@@ -12,7 +12,7 @@
 
 | # | 功能 | 状态 |
 |---|---|---|
-| 1 | 深色毛玻璃设置卡片（龙头图 + 金字「顾海龙快手」+ 英文小字，两列菜单，金底完成钮） | 做成（纯 UIKit） |
+| 1 | 深色毛玻璃设置卡片（哆啦A梦图 + 金字「顾海龙快手」+ 英文小字，两列菜单，金底完成钮） | 做成（纯 UIKit） |
 | 2 | 悬浮入口钮（独立 UIWindow，可拖动，位置记忆，点开面板） | 做成（纯 UIKit） |
 | 4 | 金底「完成」按钮 | 做成（每页底部都有） |
 | 5 | 面板开合动画（0.28s 弹簧放大淡入，关闭 0.2s） | 做成 |
@@ -27,7 +27,7 @@
 - 设置：CFPreferences 域 `com.guhailong.kuaishou`（App 沙盒 `Library/Preferences/com.guhailong.kuaishou.plist`）。
 - Filter：`com.jiangjia.gif`（公开资料值；**上真机前须用 Filza 核对 Lee 手机上快手的实际 Bundle ID**）。
 - 本版 **没有任何 Hook**：%ctor 只延后建悬浮钮、恢复探针开关、注册回前台通知。探针全是定时器 + 通用 UIKit 遍历。
-- 龙头图：`layout/Library/Application Support/GuHaiLongKuaishou/dragon-head.jpg`（256px，29,706 B，由官网龙头裁图缩来；未复制参考插件的书法图）。
+- 哆啦A梦图：`layout/Library/Application Support/GuHaiLongKuaishou/doraemon.png`（168×168 PNG，44,177 B，分屏插件同款 `doraemon-button@3x.png`；Lee 2026-11-15 12:30 说图片换成哆啦A梦，v1.0.1 里龙头图已换掉）。
 - 零字面量：源码 `@"` 0 个；`__cfstring` 0（见验证）。
 
 ## 构建过程（Linux 冒烟）
@@ -129,3 +129,32 @@
   「已复制 QQ 号」×2、「打开失败，请检查网络后重试」×2。
 - 源码层：`@"` 0 个（全部 7 个源码文件）；禁 API 字串 0 处；`1.0.0` 只剩主聊天验包留下的
   `build-1.0.0/verify/control`（未跟踪目录，已由 `.gitignore` 的 `build-*/` 排除，不进仓库）。
+
+## 换图：龙头图 → 哆啦A梦图（v1.0.1 未推之前，Lee 2026-11-15 12:30 定）
+
+- `layout/Library/Application Support/GuHaiLongKuaishou/dragon-head.jpg` 已删，
+  `doraemon-button@3x.png`（分屏插件同款，168×168 PNG，44,177 B）复制为
+  `layout/Library/Application Support/GuHaiLongKuaishou/doraemon.png`。
+- helper 改名 `GHLKSDragonImagePath` → `GHLKSLogoImagePath`（`GHLKS.h` 声明 + 注释、`GHLKS.m` 定义、
+  `GHLKSPanel.m` 三处调用同步改；路径仍走 C 字串，两个候选路径都改成 `doraemon.png`）。
+  悬浮钮、卡片头、关于页三处共用这张图，裁剪方式不变（ScaleAspectFill + 圆角）。
+- README 与本文件现状描述同步改成哆啦A梦图；v1.0.0 验包小节里的旧数字是历史记录（那时的包确实装的是龙头图），未改。
+- 零字面量：源码 `@"` 仍为 0 个。
+
+## 换图后重验（Linux 冒烟，/tmp/ghlks101，包验完已留 staging、/tmp 已清）
+
+- `.deb`：`packages/com.guhailong.kuaishou_1.0.1-1+debug_iphoneos-arm64.deb`，
+  **114,456 B，SHA256 `ab6ff1d4836474029d81180f1675943aa9d191a56a5691f50345d721f5610a1e`**，
+  control Version `1.0.1-1+debug`，Package `com.guhailong.kuaishou`，Architecture `iphoneos-arm64`，
+  Depends `firmware (>= 15.0), mobilesubstrate`。一次编过，只有已知的 arm64e ABI 警告。
+  旧 cbed577 冒烟包（99,774 B）已被新包覆盖（packages/ 不进仓库，旧包可随时从提交重编）。
+- 内容：dylib 372,160 B、Filter plist 52 B（`com.jiangjia.gif`）、`doraemon.png` 44,177 B；
+  包里没有 `dragon-head.jpg`。
+- dylib：universal arm64（cpusubtype 0）+ arm64e（cpusubtype 2）；`__cfstring` **0 / 0**；
+  禁 API 全 0（两片）。
+- 字串计数（每片）：「1.0.1」×15、「1.0.0」×0、「doraemon.png」×2、「dragon-head」×0、
+  「1130823454」×2、「qun.qq.com」×1、「加入QQ群」×1、「GuHaiLongKuaishou.log」×1、
+  「com.guhailong.kuaishou」×1、「14.10.10」×2。
+- 说明：cbed577 报告里写的 dylib 388,688 B 与本次重编的 372,160 B 对不上（包大小变化与换图完全吻合：
+  99,774 − 29,706 + 44,177 ≈ 114,456），字串计数全部对得上，应为上次量法不同；旧包已被覆盖，无法复核，记一笔。
+- 诚实状态：换图只在本地冒烟验过，未真机验过——悬浮钮、卡片头、关于页三处是不是都显示哆啦A梦，要真机看。
