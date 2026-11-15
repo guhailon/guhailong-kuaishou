@@ -77,3 +77,15 @@
 1. 类 dump 怎么做（Lee 没电脑）：没有 14.10.10 的 dump，精选纯净做不出实效，底栏透明也只能停在探针。
 2. 若 Lee 要真机测：本冒烟包是 Linux debug 版、路径是 `Library/...`，**绝不能直接装到 rootless 真机上**；
    真机测试包要走 macOS 发布构建——但 Lee 已定本版只留本地，不推不编发布包，真机测的事等他另行定。
+
+## 2026-11-15 11:59 — Lee 改批：公开仓库 + macOS 编译 + 上源
+
+- 10:58 Lee 定本版只留本地（不推、不部署、不上源）；11:54 Lee 问"做了吗"，回的是冒烟包已验过、真机包要走 macOS 编、没批不动。
+- 11:59 Lee 说"我现在批"，经确认：新建公开 GitHub 仓库 `guhailon/guhailong-kuaishou`、走 macOS 编真机包、包直接发他、不上源。
+- 随后（11:59）Lee 又改口"上源吧"——最终决定：**macOS 包编好验过后上越狱源**（不再是只留本地）。
+- 本地准备（本机完成，未推送、未调 GitHub API、未部署、未动越狱源）：
+  git init + `.github/workflows/build.yml`（照分屏改，artifact 名 `com.guhailong.kuaishou_1.0.0_iphoneos-arm64`）
+  + `.gitignore`（排除 `packages/` 里的 Linux debug .deb 与 `.theos/`）+ README 过期"只留本地"字句已改。
+- 本地提交：`3d2cf2f` "v1.0.0: panel shell, macOS build"（15 文件，见 git show）；本节记录在随后提交。
+- 待主聊天接手：建公开空仓库 `guhailon/guhailong-kuaishou` → 按 push 规则用 gh_push.py 推送 → 跑 Actions
+  → 下载验包（Version 1.0.0、universal arm64+arm64e、__cfstring 0、禁 API 0）→ 验过后部署上越狱源。
