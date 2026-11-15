@@ -1,0 +1,11 @@
+Package: com.guhailong.kuaishou
+Name: 顾海龙快手
+Version: 1.0.0
+Description: 顾海龙快手 1.0.0 — 面板外壳版：深色毛玻璃设置卡片、悬浮入口、诊断反馈与关于页；精选纯净与底栏透明目前仅为探针（需快手 14.10.10 类 dump 后再接实效）。免费使用，仅限学习交流。
+Homepage: https://guhailong-repo.pages.dev
+Section: Tweaks
+Depends: firmware (>= 15.0), mobilesubstrate
+Priority: optional
+Maintainer: 顾海龙
+Author: 顾海龙
+Architecture: iphoneos-arm64
