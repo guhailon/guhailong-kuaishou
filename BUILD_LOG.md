@@ -89,3 +89,43 @@
 - 本地提交：`3d2cf2f` "v1.0.0: panel shell, macOS build"（15 文件，见 git show）；本节记录在随后提交。
 - 待主聊天接手：建公开空仓库 `guhailon/guhailong-kuaishou` → 按 push 规则用 gh_push.py 推送 → 跑 Actions
   → 下载验包（Version 1.0.0、universal arm64+arm64e、__cfstring 0、禁 API 0）→ 验过后部署上越狱源。
+
+## v1.0.1 关于页加 QQ 群（2026-11-15）
+
+- 起因：v1.0.0 已上源（源 v98）。Lee 真机测关于页照片确认面板正常跑、Filter `com.jiangjia.gif` 是对的，
+  但关于页只有 QQ 号 2309103548，没有 QQ 群行。Lee 2026-11-15 12:26 批：加上，跟抖音一样（QQ群 1130823454＋金色加群按钮）。
+- 改了什么（只动关于页，其余不动）：
+  - `GHLKS.h`：版本号 1.0.0 → 1.0.1；新增 `kGHLKSQQGroupNumber = "1130823454"` 与
+    `kGHLKSQQGroupJoinURL`（加群邀请链接照抖音的 `GHL_QQ_GROUP_JOIN_URL` 抄，与抖音同群，只留这一份）。
+  - `GHLKSPanel.m` 关于页：QQ 行下面加 QQ 群行「QQ群：1130823454（点按复制）」（tag 4509/4510），
+    点按复制群号并弹「已复制群号」；再加金色「加入QQ群」大按钮（tag 4511，用共用的金底钮样式），
+    点按 `openURL` 打开邀请链接，打不开弹「打开失败，请检查网络后重试」（completion 可能不在主线程，提示走主线程）。
+  - 日志字串前缀 `v1.0.0` → `v1.0.1`（`GHLKSPanel.m`、`GHLKSProbe.m`、`Tweak.xm` 全量替换）；
+    关于页描述文案同步改成 1.0.1 并写明新增了 QQ 群行与加群按钮。
+  - `control`：Version 1.0.1，Description 同步改；`README.md` 加 v1.0.1 一节。
+- 零字面量：新代码的全部字串走 C 字串 + `GHLKSStr`（照 QQ 号行的写法），源码 `@"` 仍为 0 个。
+- 诚实状态：QQ 群行与加群按钮只在本地冒烟验过，未真机验过——点按复制、打开邀请链接进群，都要真机看。
+  （加群链接与抖音是同一条，抖音那边 1.0.4 起就在用，链接本身是经过真机的。）
+
+## 验证（Linux 冒烟，/tmp/ghlks101，包验完已留 staging、/tmp 已清）
+
+- `.deb`：`packages/com.guhailong.kuaishou_1.0.1-1+debug_iphoneos-arm64.deb`，
+  **99,774 B，SHA256 `37a81521e98fcf5ac83cdd10b26c57e339ba1fe6530a3e53a50b5cf0ab2cc580`**，
+  control：Package `com.guhailong.kuaishou`、Version `1.0.1-1+debug`（+debug 是 Linux 冒烟版的后缀，macOS 发布包才是 1.0.1）、
+  Architecture `iphoneos-arm64`、Depends `firmware (>= 15.0), mobilesubstrate`。
+  旧 1.0.0 冒烟包（97,730 B，SHA256 `c271ef7e…`）仍在 `packages/` 里，未动。
+- 内容：dylib 388,688 B（比 1.0.0 的 370,656 B 大，新增的群行与按钮代码在内）、
+  Filter plist 52 B（`com.jiangjia.gif`）、龙头图 29,706 B。
+- dylib：universal arm64 + arm64e（Linux 编的 arm64e 切片照例无 PAC00，macOS 编才有——冒烟只验语法）。
+- `__cfstring`：**0 / 0**（两片皆无此 section，python 解析 Mach-O load commands 验过）。
+- 禁 API 全 0（两片）：`CFNotificationCenterAddObserver`、`LSApplicationWorkspace`、
+  `dispatch_get_global_queue`、`keyWindow`、`NSUUID`、`uuid_generate`、`uuid_unparse`。
+- 中文字串 UTF-8 计数（两片一致，×2 即双切片合计）：「1.0.1」×30（双切片合计，单片 ×15）、
+  「1.0.0」×0（代码层已归零，BUILD_LOG/README 历史记录除外）；「1130823454」×4（常量 + 群行标签，双切片）、
+  「qun.qq.com」×2（加群链接，双切片）、「加入QQ群」×2、「已复制群号」×2、「QQ群」×4（群行标签 + 按钮标题）、
+  「2309103548」×4、「顾海龙快手」×6、「GUHAILONG KUAISHOU」×2、「v1.0.1 loaded」×2、
+  「panel opened」×2、「bottom probe」×8、「feed probe」×8、「14.10.10」×4、
+  「com.guhailong.kuaishou」×2、「GuHaiLongKuaishou.log」×2、「dragon-head.jpg」×4、
+  「已复制 QQ 号」×2、「打开失败，请检查网络后重试」×2。
+- 源码层：`@"` 0 个（全部 7 个源码文件）；禁 API 字串 0 处；`1.0.0` 只剩主聊天验包留下的
+  `build-1.0.0/verify/control`（未跟踪目录，已由 `.gitignore` 的 `build-*/` 排除，不进仓库）。

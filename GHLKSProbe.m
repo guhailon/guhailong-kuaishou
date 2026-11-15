@@ -110,7 +110,7 @@
     }
     self.bottomBarNodes = found;
     if (found > 0) self.bottomBarApplied = YES;
-    GHLKSLog("v1.0.0 bottom probe: nodes=%ld applied=%d", found, self.bottomBarApplied ? 1 : 0);
+    GHLKSLog("v1.0.1 bottom probe: nodes=%ld applied=%d", found, self.bottomBarApplied ? 1 : 0);
     // 2.5 秒后复查：改动还在不在。
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self recheckBottomBar];
@@ -162,7 +162,7 @@
         if ([bar.backgroundColor isEqual:[UIColor clearColor]]) alive++;
     }
     self.bottomBarSticks = (total > 0 && alive == total);
-    GHLKSLog("v1.0.0 bottom probe recheck: alive=%ld total=%ld sticks=%d", alive, total, self.bottomBarSticks ? 1 : 0);
+    GHLKSLog("v1.0.1 bottom probe recheck: alive=%ld total=%ld sticks=%d", alive, total, self.bottomBarSticks ? 1 : 0);
 }
 
 - (void)restoreBottomBar {
@@ -188,7 +188,7 @@
     self.bottomBarApplied = NO;
     self.bottomBarSticks = NO;
     self.bottomBarNodes = 0;
-    GHLKSLog("v1.0.0 bottom probe restored");
+    GHLKSLog("v1.0.1 bottom probe restored");
 }
 
 - (NSString *)bottomBarProbeStatus {
@@ -288,10 +288,10 @@
     if ([sig isEqualToString:self.lastFeedSignature]) return; // 没变就不刷日志
     self.lastFeedSignature = sig;
     if (cellCount == 0) {
-        GHLKSLog("v1.0.0 feed probe scan %ld: no visible cells", self.feedScans);
+        GHLKSLog("v1.0.1 feed probe scan %ld: no visible cells", self.feedScans);
         return;
     }
-    GHLKSLog("v1.0.0 feed probe scan %ld: cells=%ld\n%s", self.feedScans, cellCount, [log UTF8String]);
+    GHLKSLog("v1.0.1 feed probe scan %ld: cells=%ld\n%s", self.feedScans, cellCount, [log UTF8String]);
 }
 
 - (NSString *)feedProbeStatus {

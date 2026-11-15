@@ -139,7 +139,7 @@ static void GHLKSShowToast(NSString *text) {
     if (gesture.state == UIGestureRecognizerStateEnded || gesture.state == UIGestureRecognizerStateCancelled) {
         GHLKSPrefsSetDouble("floatButtonXPercent", center.x / CGRectGetWidth(screen));
         GHLKSPrefsSetDouble("floatButtonYPercent", center.y / CGRectGetHeight(screen));
-        GHLKSLog("v1.0.0 float button moved to %.0f,%.0f", center.x, center.y);
+        GHLKSLog("v1.0.1 float button moved to %.0f,%.0f", center.x, center.y);
     }
 }
 
@@ -190,7 +190,7 @@ void GHLKSInstallFloatingButton(void) {
     [buttonView addGestureRecognizer:pan];
     objc_setAssociatedObject(GHLKSFloatWindow, "handler", handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     GHLKSFloatWindow.hidden = NO;
-    GHLKSLog("v1.0.0 float button installed at %.0f,%.0f image=%s", cx, cy, imagePath ? "yes" : "no");
+    GHLKSLog("v1.0.1 float button installed at %.0f,%.0f image=%s", cx, cy, imagePath ? "yes" : "no");
 }
 
 #pragma mark - 子页基类（卡片 + 顶部返回行 + 底部完成钮）
@@ -567,14 +567,14 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
 - (void)bottomBarSwitchChanged:(UISwitch *)sw {
     GHLKSPrefsSetBool("bottomBarProbeEnabled", sw.on);
     [[GHLKSProbe sharedProbe] setBottomBarProbeEnabled:sw.on];
-    GHLKSLog("v1.0.0 bottom probe switch %s", sw.on ? "on" : "off");
+    GHLKSLog("v1.0.1 bottom probe switch %s", sw.on ? "on" : "off");
     [self refreshValues];
 }
 
 - (void)feedSwitchChanged:(UISwitch *)sw {
     GHLKSPrefsSetBool("feedProbeEnabled", sw.on);
     [[GHLKSProbe sharedProbe] setFeedProbeEnabled:sw.on];
-    GHLKSLog("v1.0.0 feed probe switch %s", sw.on ? "on" : "off");
+    GHLKSLog("v1.0.1 feed probe switch %s", sw.on ? "on" : "off");
     [self refreshValues];
 }
 
@@ -588,7 +588,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
         [[GHLKSProbe sharedProbe] feedProbeStatus],
         GHLKSStr(openBuf)];
     [UIPasteboard generalPasteboard].string = text;
-    GHLKSLog("v1.0.0 status text copied");
+    GHLKSLog("v1.0.1 status text copied");
     GHLKSShowToast(GHLKSStr("已复制状态文本"));
 }
 
@@ -723,6 +723,8 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     UILabel *_descLabel;
     UILabel *_disclaimerLabel;
     UIView *_qqRow;
+    UIView *_groupRow;
+    UIButton *_joinGroupButton;
 }
 
 - (instancetype)init {
@@ -760,7 +762,7 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     ver.textAlignment = NSTextAlignmentCenter;
     ver.tag = 4504;
     [self.content addSubview:ver];
-    _descLabel = GHLKSMakeLabel("顾海龙快手 1.0.0（面板外壳版）：深色毛玻璃设置卡片、悬浮入口、诊断反馈与关于页。精选纯净与底栏透明目前仅为探针，待快手 14.10.10 类 dump 后再接实效。免费使用，仅限学习交流。", 13, NO, [UIColor whiteColor]);
+    _descLabel = GHLKSMakeLabel("顾海龙快手 1.0.1：深色毛玻璃设置卡片、悬浮入口、诊断反馈与关于页（关于页新增 QQ 群行与加入 QQ 群按钮）。精选纯净与底栏透明目前仅为探针，待快手 14.10.10 类 dump 后再接实效。免费使用，仅限学习交流。", 13, NO, [UIColor whiteColor]);
     _descLabel.numberOfLines = 0;
     _descLabel.tag = 4505;
     [self.content addSubview:_descLabel];
@@ -778,11 +780,45 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     [_qqRow addSubview:qqLabel];
     UITapGestureRecognizer *qqTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(qqTapped)];
     [_qqRow addGestureRecognizer:qqTap];
+    // 1.0.1：QQ 群行（照抖音的做法，点群号复制）+ 金色加入 QQ 群大按钮。
+    _groupRow = [[UIView alloc] init];
+    _groupRow.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.05];
+    _groupRow.layer.cornerRadius = 8;
+    _groupRow.tag = 4509;
+    [self.content addSubview:_groupRow];
+    UILabel *groupLabel = GHLKSMakeLabel("QQ群：1130823454（点按复制）", 14, NO, [UIColor whiteColor]);
+    groupLabel.tag = 4510;
+    [_groupRow addSubview:groupLabel];
+    UITapGestureRecognizer *groupTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(groupTapped)];
+    [_groupRow addGestureRecognizer:groupTap];
+    _joinGroupButton = GHLKSMakeGoldButton("加入QQ群", self, @selector(joinGroupTapped));
+    _joinGroupButton.tag = 4511;
+    [self.content addSubview:_joinGroupButton];
 }
 
 - (void)qqTapped {
     [UIPasteboard generalPasteboard].string = GHLKSStr(kGHLKSQQNumber);
     GHLKSShowToast(GHLKSStr("已复制 QQ 号"));
+}
+
+- (void)groupTapped {
+    [UIPasteboard generalPasteboard].string = GHLKSStr(kGHLKSQQGroupNumber);
+    GHLKSShowToast(GHLKSStr("已复制群号"));
+}
+
+- (void)joinGroupTapped {
+    NSURL *url = [NSURL URLWithString:GHLKSStr(kGHLKSQQGroupJoinURL)];
+    if (!url) {
+        GHLKSShowToast(GHLKSStr("打开失败，请检查网络后重试"));
+        return;
+    }
+    [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:^(BOOL success) {
+        if (!success) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                GHLKSShowToast(GHLKSStr("打开失败，请检查网络后重试"));
+            });
+        }
+    }];
 }
 
 - (void)layoutPage {
@@ -814,7 +850,13 @@ static UIButton *GHLKSMakeDarkButton(const char *title, id target, SEL action) {
     _qqRow.frame = CGRectMake(16, y, cw - 32, 44);
     UILabel *qqLabel = (UILabel *)[_qqRow viewWithTag:4508];
     qqLabel.frame = CGRectMake(12, 0, cw - 56, 44);
-    y += 44 + 20;
+    y += 44 + 12;
+    _groupRow.frame = CGRectMake(16, y, cw - 32, 44);
+    UILabel *groupLabel = (UILabel *)[_groupRow viewWithTag:4510];
+    groupLabel.frame = CGRectMake(12, 0, cw - 56, 44);
+    y += 44 + 12;
+    _joinGroupButton.frame = CGRectMake(16, y, cw - 32, 48);
+    y += 48 + 20;
     self.scroll.contentSize = CGSizeMake(cw, y);
     CGRect cf = self.content.frame;
     cf.size.height = y;
@@ -873,7 +915,7 @@ void GHLKSShowPanel(void) {
         GHLKSPanelNav.view.alpha = 1;
         GHLKSPanelNav.view.transform = CGAffineTransformIdentity;
     } completion:nil];
-    GHLKSLog("v1.0.0 panel opened (%ld)", count);
+    GHLKSLog("v1.0.1 panel opened (%ld)", count);
 }
 
 void GHLKSHidePanel(void) {
@@ -887,7 +929,7 @@ void GHLKSHidePanel(void) {
         GHLKSPanelNav.view.transform = CGAffineTransformIdentity;
         if (GHLKSFloatWindow) GHLKSFloatWindow.hidden = NO;
     }];
-    GHLKSLog("v1.0.0 panel closed");
+    GHLKSLog("v1.0.1 panel closed");
 }
 
 BOOL GHLKSPanelIsOpen(void) {

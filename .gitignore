@@ -1,3 +1,5 @@
 # 本地 Linux 冒烟产物不上仓库（macOS 构建产物由 Actions 生成）
 .theos/
 packages/
+# 主聊天验包用的临时目录（如 build-1.0.0/verify/）也不上仓库
+build-*/

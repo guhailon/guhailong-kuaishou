@@ -9,12 +9,15 @@
 extern "C" {
 #endif
 
-static const char *kGHLKSVersion = "1.0.0";
+static const char *kGHLKSVersion = "1.0.1";
 static const char *kGHLKSTargetKuaishouVersion = "14.10.10";
 static const char *kGHLKSTargetKuaishouBuild = "10089";
 static const char *kGHLKSPrefsDomain = "com.guhailong.kuaishou";
 static const char *kGHLKSLogFileName = "GuHaiLongKuaishou.log";
 static const char *kGHLKSQQNumber = "2309103548";
+static const char *kGHLKSQQGroupNumber = "1130823454";
+// QQ 群加群邀请链接（与抖音同群 1130823454，做法与链接值照抖音的抄，只留这一份）。
+static const char *kGHLKSQQGroupJoinURL = "https://qun.qq.com/universal-share/share?ac=1&authKey=1jedvqhgrhj4mHm9Sn3c2xEkV3wYRdGeXsFSXn8hHJsRBfOUByIchAevdyEfS5zF&busi_data=eyJncm91cENvZGUiOiIxMTMwODIzNDU0IiwidG9rZW4iOiJxOE5XZTRWSi85emU0RjdNZXNyd2k2Y0lMYmw4MmtnNWVjNjRCeE56SnpNMWRYditLaFJFSU5iV2xoYzViNEl5IiwidWluIjoiMjMwOTEwMzU0OCJ9&data=nYcdCBHCI0lOt1ACENZWO6AfqrZ-Ha1TSfx7CBzkhHazin64W38fmSNXGIU0a9oPEvGgEk8ggiqR2imYH4J-pg&svctype=4&tempid=h5_group_info";
 
 // 由 UTF-8 C 字串在运行时拼出 NSString（不产生 __cfstring）。
 static inline NSString *GHLKSStr(const char *c) {
